@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	// "strconv"
+	"strconv"
 
-	// "unsafe"
+	"unsafe"
 
 	configManager "MultiDiva-Core/managers/configManager"
 	connectionManager "MultiDiva-Core/managers/connectionManager"
@@ -23,7 +23,12 @@ func Init() {
 
 //export OnFrame
 func OnFrame() {
-	connectionManager.ReceiveScore()
+	// connectionManager.ReceiveScore()
+	location := uintptr(0x1412EF56C)
+	p := unsafe.Pointer(location)
+	score := *((*int)(p))
+	score = score - 4294967296
+	fmt.Println("Score: " + strconv.Itoa(score))
 }
 
 // //export StartReceiverThread
