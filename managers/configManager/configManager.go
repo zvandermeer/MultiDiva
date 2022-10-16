@@ -20,7 +20,6 @@ func LoadConfig() (cfg dataTypes.ConfigData) {
 
 	viper.SetDefault("config_version", 1)
 	viper.SetDefault("debug", false)
-	viper.SetDefault("default_timeout", 5000)
 	viper.SetDefault("server_address", "localhost")
 	viper.SetDefault("server_port", "9988")
 	viper.SetDefault("username", "User")
@@ -41,7 +40,6 @@ func LoadConfig() (cfg dataTypes.ConfigData) {
 
 	cfg.Config_Version = viper.GetInt("config_version")
 	cfg.Debug = viper.GetBool("debug")
-	cfg.Default_timeout = viper.GetInt("default_timeout")
 	cfg.Server_address = viper.GetString("server_address")
 	cfg.Port = viper.GetString("server_port")
 	cfg.Username = viper.GetString("username")
