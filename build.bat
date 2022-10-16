@@ -1,1 +1,0 @@
-go build -o bin/MultiDiva.dll -buildmode=c-shared
