@@ -5,7 +5,9 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
+	"unsafe"
 
 	dataTypes "MultiDiva-Core/dataTypes"
 )
@@ -18,6 +20,8 @@ const (
 var clientQuit bool
 var connection net.Conn
 var cfg dataTypes.ConfigData
+var listening bool
+var sending bool
 
 func Connect(cfg dataTypes.ConfigData) bool {
 	//establish connection
@@ -37,9 +41,19 @@ func Connect(cfg dataTypes.ConfigData) bool {
 	return false
 }
 
-func SendScore(score string) {
-	if _, err := connection.Write([]byte(score)); err != nil {
-		fmt.Println("[MultiDiva] Error sending score to", cfg.Server_address+":"+cfg.Port+", score not sent. Error details:", err)
+func SendScore() {
+	if !sending {
+		sending = true
+		location := uintptr(0x1412EF56C)
+		p := unsafe.Pointer(location)
+		score := *((*int)(p))
+		score = score - 4294967296
+		scoreString := strconv.Itoa(score)
+		fmt.Println("Score: " + scoreString)
+		if _, err := connection.Write([]byte(scoreString)); err != nil {
+			fmt.Println("[MultiDiva] Error sending score to", cfg.Server_address+":"+cfg.Port+", score not sent. Error details:", err)
+		}
+		sending = false
 	}
 }
 
@@ -47,16 +61,20 @@ func ReceiveScore() {
 	//exit := false
 
 	//for !exit {
-		//fmt.Println("Test")
-		myChannel := make(chan string)
-		var serverMessage string
-		go listener(myChannel)
-		select{
-		case <-time.After(7 * time.Millisecond):
-			//fmt.Println("fail")
-		case serverMessage = <-myChannel:
-			fmt.Println("[MultiDiva] Received: ", serverMessage)
+	//fmt.Println("Test")
+	if !listening {
+		listening = true
+		buffer := make([]byte, 1024)
+		mLen, err := connection.Read(buffer)
+		if err != nil {
+			fmt.Println("[MultiDiva] Error receiving score from :", err.Error())
+			os.Exit(1)
 		}
+		serverMessage := string(buffer[:mLen])
+		fmt.Println("[MultiDiva] Received: ", serverMessage)
+
+		listening = false
+
 		// if serverMessage == "/closePipe" {
 		// 	exit = true
 		// 	if !clientQuit {
@@ -64,18 +82,9 @@ func ReceiveScore() {
 		// 	}
 		// 	break
 		// }
+	}
 
 	//}
-}
-
-func listener(myChannel chan string){
-	buffer := make([]byte, 1024)
-	mLen, err := connection.Read(buffer)
-		if err != nil {
-			fmt.Println("[MultiDiva] Error receiving score from :", err.Error())
-			os.Exit(1)
-		}
-	myChannel <- string(buffer[:mLen])
 }
 
 func CloseClient() {
