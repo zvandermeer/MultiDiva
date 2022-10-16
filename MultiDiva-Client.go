@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	configManager "MultiDiva-Core/managers/configManager"
-	connectionManager "MultiDiva-Core/managers/connectionManager"
+	configManager "github.com/ovandermeer/MultiDiva/managers/configManager"
+	connectionManager "github.com/ovandermeer/MultiDiva/managers/connectionManager"
 )
 
 import "C"

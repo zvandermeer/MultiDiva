@@ -1,4 +1,4 @@
-module MultiDiva-Core
+module github.com/ovandermeer/MultiDiva
 
 go 1.19
 

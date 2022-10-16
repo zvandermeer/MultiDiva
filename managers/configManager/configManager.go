@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	dataTypes "MultiDiva-Core/dataTypes"
+	dataTypes "github.com/ovandermeer/MultiDiva/dataTypes"
 
 	"github.com/spf13/viper"
 )
