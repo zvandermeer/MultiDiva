@@ -3,9 +3,8 @@ package main
 import "C"
 import (
 	"fmt"
-
-	configManager "github.com/ovandermeer/MultiDiva/managers/configManager"
-	connectionManager "github.com/ovandermeer/MultiDiva/managers/connectionManager"
+	"github.com/ovandermeer/MultiDiva/internal/configManager"
+	"github.com/ovandermeer/MultiDiva/internal/connectionManager"
 )
 
 //export MultiDivaInit
@@ -23,10 +22,10 @@ func MainLoop() {
 }
 
 //export SongUpdate
-func SongUpdate(songID C.int, is_practice bool) {
+func SongUpdate(songID C.int, isPractice bool) {
 	go fmt.Println("Received")
 	go fmt.Println(songID)
-	go fmt.Println(is_practice)
+	go fmt.Println(isPractice)
 }
 
 //export MultiDivaDispose

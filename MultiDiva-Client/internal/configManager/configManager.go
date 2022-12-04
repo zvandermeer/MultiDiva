@@ -2,21 +2,20 @@ package configManager
 
 import (
 	"fmt"
+	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 	"os"
-
-	dataTypes "github.com/ovandermeer/MultiDiva/dataTypes"
 
 	"github.com/spf13/viper"
 )
 
 func LoadConfig() (cfg dataTypes.ConfigData) {
-	config_path := "MultiDiva-Config"
+	configPath := "MultiDiva-Config"
 
-	viper.SetConfigName(config_path) // config file name without extension
+	viper.SetConfigName(configPath) // config file name without extension
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
 
-	config_path = "./" + config_path + ".yml"
+	configPath = "./" + configPath + ".yml"
 
 	viper.SetDefault("config_version", 1)
 	viper.SetDefault("debug", false)
@@ -27,10 +26,10 @@ func LoadConfig() (cfg dataTypes.ConfigData) {
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			fmt.Println("[MultiDiva] MultiDiva config does not exist. Attempting to create one..")
-			if _, err := os.Create(config_path); err != nil {
+			if _, err := os.Create(configPath); err != nil {
 				fmt.Println("[MultiDiva] Error creating MultiDiva config:", err.Error(), "\n Continuing with default settings.")
 			} else {
-				viper.WriteConfigAs(config_path)
+				viper.WriteConfigAs(configPath)
 				fmt.Println("[MultiDiva] New config created successfully!")
 			}
 		} else {

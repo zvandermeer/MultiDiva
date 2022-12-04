@@ -2,14 +2,13 @@ package connectionManager
 
 import (
 	"fmt"
+	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 	"net"
 	"os"
 	"os/signal"
 	"strconv"
 	"time"
 	"unsafe"
-
-	dataTypes "github.com/ovandermeer/MultiDiva/dataTypes"
 )
 
 const (
@@ -18,20 +17,20 @@ const (
 )
 
 var connection net.Conn
-var cfg dataTypes.ConfigData
+var myConfig dataTypes.ConfigData
 var listening bool
 var sending bool
 var serverConnected bool
-var InterruptSignal chan (os.Signal)
+var InterruptSignal chan os.Signal
 var oldScore int
 
-func Connect(config_in dataTypes.ConfigData) {
-	cfg = config_in
+func Connect(config dataTypes.ConfigData) {
+	myConfig = config
 	//establish connection
 	var err error
-	if connection, err = net.Dial(SERVER_TYPE, cfg.Server_address+":"+cfg.Port); err != nil {
-		fmt.Print("[MultiDiva] Error connecting to MultiDiva server'" + cfg.Server_address + ":" + cfg.Port + "', MultiDiva is not active.")
-		if cfg.Debug {
+	if connection, err = net.Dial(SERVER_TYPE, myConfig.Server_address+":"+myConfig.Port); err != nil {
+		fmt.Print("[MultiDiva] Error connecting to MultiDiva server'" + myConfig.Server_address + ":" + myConfig.Port + "', MultiDiva is not active.")
+		if myConfig.Debug {
 			fmt.Println(" Error details:", err.Error())
 		} else {
 			fmt.Print("\n")
@@ -66,8 +65,8 @@ func SendScore() {
 				scoreString := strconv.Itoa(score)
 				fmt.Println("Score: " + scoreString)
 				if _, err := connection.Write([]byte(scoreString)); err != nil {
-					fmt.Print("[MultiDiva] Error sending score to", cfg.Server_address+":"+cfg.Port+", score not sent.")
-					if cfg.Debug {
+					fmt.Print("[MultiDiva] Error sending score to", myConfig.Server_address+":"+myConfig.Port+", score not sent.")
+					if myConfig.Debug {
 						fmt.Println(" Error details:", err)
 					} else {
 						fmt.Print("\n")
@@ -86,15 +85,15 @@ func ReceiveScore() {
 			buffer := make([]byte, 1024)
 			mLen, err := connection.Read(buffer)
 			if err != nil {
-				fmt.Println("[MultiDiva] Error receiving score from " + cfg.Server_address + ":" + cfg.Port + ".")
-				if cfg.Debug {
+				fmt.Println("[MultiDiva] Error receiving score from " + myConfig.Server_address + ":" + myConfig.Port + ".")
+				if myConfig.Debug {
 					fmt.Println(" Error details:", err.Error())
 				} else {
 					fmt.Print("\n")
 				}
 			}
 			serverMessage := string(buffer[:mLen])
-			if cfg.Debug {
+			if myConfig.Debug {
 				fmt.Println("[MultiDiva] Received: ", serverMessage)
 			}
 
@@ -115,6 +114,9 @@ func CloseClient() {
 		fmt.Println("Error writing:", err.Error())
 	}
 	time.Sleep(10 * time.Millisecond)
-	connection.Close()
+	err = connection.Close()
+	if err != nil {
+		return
+	}
 	fmt.Println("\nGoodbye!")
 }
