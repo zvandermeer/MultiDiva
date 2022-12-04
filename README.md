@@ -9,7 +9,7 @@ Experimental multiplayer and custom leaderboard support for Hatsune Miku: Projec
  - Install [Microsoft Visual Studio](https://visualstudio.microsoft.com/) or [Jetbrains Rider](https://www.jetbrains.com/rider/)
  - Open "MultiDiva-Loader/MultiDiva.sln" in your .NET IDE of choice
  - Build the solution
- - The compiled .DLL can be found in the 'x64' directory
+ - The compiled .DLL can be found in the 'x64/' directory
 
 ### MultiDiva-Client.dll (Go)
 
@@ -20,4 +20,4 @@ Experimental multiplayer and custom leaderboard support for Hatsune Miku: Projec
 
 	`go build -o ./bin/MultiDiva-Client.dll -buildmode=c-shared  ./cmd/MultiDiva-Client`
 
-- The compiled .DLL can be found in the 'bin' directory
+- The compiled .DLL can be found in the 'bin/' directory

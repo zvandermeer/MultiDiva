@@ -161,3 +161,6 @@ fabric.properties
 
 ### Binary Go files ###
 bin/
+
+### Project configuration files ###
+*.yml

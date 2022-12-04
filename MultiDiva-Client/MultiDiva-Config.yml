@@ -1,5 +1,0 @@
-config_version: 1
-debug: false
-server_address: localhost
-server_port: "9988"
-username: User

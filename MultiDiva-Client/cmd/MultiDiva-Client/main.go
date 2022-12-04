@@ -3,6 +3,7 @@ package main
 import "C"
 import (
 	"fmt"
+
 	"github.com/ovandermeer/MultiDiva/internal/configManager"
 	"github.com/ovandermeer/MultiDiva/internal/connectionManager"
 )
@@ -41,5 +42,3 @@ func main() {
 		MainLoop()
 	}
 }
-
-// TODO: Revisit transitioning from viper to yaml library
