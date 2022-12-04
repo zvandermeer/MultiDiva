@@ -30,11 +30,13 @@ go.work
 
 # End of https://www.toptal.com/developers/gitignore/api/go
 
-### IDE Files ###
+### IDE files ###
 /.vscode/
 
-### Project Files ###
+### Project files ###
 *.yml
 *.sh
 *.bat
-*.dll
+
+### Binary files ###
+bin/
