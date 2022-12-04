@@ -18,6 +18,6 @@ Experimental multiplayer and custom leaderboard support for Hatsune Miku: Projec
 
 	`go mod tidy`
 
-	`go build -o ./bin/MultiDiva-Client.dll -buildmode=c-shared  ./cmd/MultiDiva-Client`
+	`go build -o ./bin/MultiDiva-Client.dll -buildmode=c-shared`
 
 - The compiled .DLL can be found in the 'bin/' directory

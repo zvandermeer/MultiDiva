@@ -1,1 +1,1 @@
-go build -o ./bin/MultiDiva-Client.dll -buildmode=c-shared ./cmd/MultiDiva-Client
+go build -o ./bin/MultiDiva-Client.dll -buildmode=c-shared
