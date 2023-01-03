@@ -6,6 +6,7 @@ import (
 
 	"github.com/ovandermeer/MultiDiva/internal/configManager"
 	"github.com/ovandermeer/MultiDiva/internal/connectionManager"
+	"github.com/ovandermeer/MultiDiva/internal/scoreManager"
 )
 
 //export MultiDivaInit
@@ -32,6 +33,11 @@ func SongUpdate(songID C.int, isPractice bool) {
 //export MultiDivaDispose
 func MultiDivaDispose() {
 	connectionManager.CloseClient()
+}
+
+//export OnScoreTrigger
+func OnScoreTrigger(PVDiff C.int, PVGrade C.int) {
+	go scoreManager.GetScore(int32(PVDiff), int32(PVGrade))
 }
 
 // use for debugging without diva running

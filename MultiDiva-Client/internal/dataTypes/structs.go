@@ -18,3 +18,26 @@ func NewConfigData() (config ConfigData) {
 	config.Username = "User"
 	return
 }
+
+type DivaScore struct {
+	TotalScore     int32
+	Unknown1       int32
+	Unknown2       int32
+	Unknown3       int32
+	Unknown4       int32
+	Unknown5       int32
+	Unknown6       int32
+	Unknown7       int32
+	Unknown8       int32
+	Combo          int32
+	PreAdjustCool  int32
+	PreAdjustFine  int32
+	PreAdjustSafe  int32
+	PreAdjustSad   int32
+	PreAdjustWorst int32
+	Cool           int32
+	Fine           int32
+	Safe           int32
+	Sad            int32
+	Worst          int32
+}

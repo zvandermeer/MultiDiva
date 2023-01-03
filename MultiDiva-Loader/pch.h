@@ -11,6 +11,5 @@
 
 // Deps
 #include "helpers.h"
-#include "signature.h"
 #include "detours/include/detours.h"
 
