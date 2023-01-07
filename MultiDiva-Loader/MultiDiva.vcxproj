@@ -155,7 +155,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="deps\SigScan.h" />
-    <ClInclude Include="Diva.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>

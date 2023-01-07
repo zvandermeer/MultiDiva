@@ -21,9 +21,6 @@
     <ClInclude Include="deps\SigScan.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Diva.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">

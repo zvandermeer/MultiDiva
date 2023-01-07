@@ -1,16 +1,5 @@
 // dllmain.cpp : Defines the entry point for the DLL application.
 #include "pch.h"
-#include <SigScan.h>
-#include "Diva.h"
-
-// 1.02 (RocketRacer)
-const uint64_t DivaScoreBaseAddress = 0x00000001412EF568;
-const uint64_t DivaScoreCompletionRateAddress = 0x00000001412EF634;
-const uint64_t DivaScoreWorstCounterAddress = 0x00000001416E2D40; // For whatever reason the "worst" counter is stored separately from the rest of the hit counters
-const uint64_t DivaScoreGradeAddress = 0x00000001416E2D00;
-const uint64_t DivaCurrentPVTitleAddress = 0x00000001412EF228;
-const uint64_t DivaCurrentPVIdAddress = 0x00000001412C2340;
-const uint64_t DivaCurrentPVDifficultyAddress = 0x00000001423157AC;
 
 // Mod Library
 HMODULE m_Library;
@@ -20,7 +9,8 @@ typedef void(__cdecl* _OnInit)();
 typedef void(__cdecl* _OnDispose)();
 typedef void(__cdecl* _OnSongUpdate)(int songId, bool isPractice);
 typedef void(__cdecl* _MainLoop)();
-typedef void(__cdecl* _OnScoreTrigger)(int, int);
+typedef void(__cdecl* _OnScoreTrigger)();
+typedef void(__cdecl* _OnNoteHit)();
 
 
 // Mod Functions
@@ -29,6 +19,7 @@ _OnDispose p_OnDispose;
 _OnSongUpdate p_OnSongUpdate;
 _MainLoop p_MainLoop;
 _OnScoreTrigger p_OnScoreTrigger;
+_OnNoteHit p_OnNoteHit;
 
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
@@ -82,6 +73,12 @@ void* DivaScoreTrigger = sigScan(
     "xxxx?xxxx?xxxx?xxxxxxxxxxxxxxxxxxx????xxxxxxxxxxxx?????xx????"
 );
 
+// 1.02: 0x14024319F
+void* sigNoteHit = sigScan(
+    "\x44\x0f\xb6\x65\x00\x44\x88\x64\x24",
+    "xxxx?xxxx"
+);
+
 /*
  * Hooks
  */
@@ -119,62 +116,22 @@ HOOK(__int64, __stdcall, _SongEnd, sigSongEnd)
 }
 
 HOOK(int, __fastcall, _PrintResult, DivaScoreTrigger, int a1) {
-    int difficulty;
-    int grade;
-
-    std::string& DivaTitle = *(std::string*)DivaCurrentPVTitleAddress;
-    DIVA_DIFFICULTY DivaDiff = *(_DIVA_DIFFICULTY*)DivaCurrentPVDifficultyAddress;
-    DIVA_GRADE DivaGrade = *(_DIVA_GRADE*)DivaScoreGradeAddress;
-
-    switch (DivaDiff)
-    {
-        case Normal:
-            difficulty = 1;
-            break;
-        case Hard:
-            difficulty = 2;
-            break;
-        case Extreme:
-            difficulty = 3;
-            break;
-        case ExExtreme:
-            difficulty = 4;
-            break;
-        case Easy:
-            difficulty = 0;
-            break;
-        default:
-            break;
-    }
-    switch (DivaGrade)
-    {
-        case Failed:
-            grade = 0;
-            break;
-        case Cheap:
-            grade = 1;
-            break;
-        case Standard:
-            grade = 2;
-            break;
-        case Great:
-            grade = 3;
-            break;
-        case Excellent:
-            grade = 4;
-            break;
-        case Perfect:
-            grade = 5;
-            break;
-        default:
-            break;
-    }
 
     if (m_Library) {
-        p_OnScoreTrigger(difficulty, grade);
+        p_OnScoreTrigger();
     }
 
     return original_PrintResult(a1);
+}
+
+HOOK(void, __stdcall, _NoteHit, sigNoteHit, __int64 a1, __int64 a2, __int64 a3)
+{
+    if (m_Library)
+    {
+        p_OnNoteHit();
+    }
+
+    original_NoteHit(a1, a2, a3);
 }
 
 /*
@@ -193,12 +150,14 @@ extern "C" __declspec(dllexport) void Init()
         p_OnSongUpdate = (_OnSongUpdate)GetProcAddress(m_Library, "SongUpdate");
         p_MainLoop = (_MainLoop)GetProcAddress(m_Library, "MainLoop");
         p_OnScoreTrigger = (_OnScoreTrigger)GetProcAddress(m_Library, "OnScoreTrigger");
+        p_OnNoteHit = (_OnNoteHit)GetProcAddress(m_Library, "OnNoteHit");
 
         // Install Hooks
         INSTALL_HOOK(_SongStart);
         INSTALL_HOOK(_SongEnd);
         INSTALL_HOOK(_SongPracticeStart);
         INSTALL_HOOK(_PrintResult);
+        INSTALL_HOOK(_NoteHit);
 
         // Mod Entry Point
         p_OnInit();

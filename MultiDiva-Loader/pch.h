@@ -12,4 +12,5 @@
 // Deps
 #include "helpers.h"
 #include "detours/include/detours.h"
+#include <SigScan.h>
 
