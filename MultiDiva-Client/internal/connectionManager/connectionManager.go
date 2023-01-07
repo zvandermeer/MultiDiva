@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"time"
+	"strings"
 	"unsafe"
 
 	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
@@ -66,11 +66,9 @@ func SendScore() {
 				scoreString := strconv.Itoa(score)
 				fmt.Println("Score: " + scoreString)
 				if _, err := connection.Write([]byte(scoreString)); err != nil {
-					fmt.Print("[MultiDiva] Error sending score to", myConfig.ServerAddress+":"+myConfig.Port+", score not sent.")
+					fmt.Println("[MultiDiva] Error sending score to", myConfig.ServerAddress+":"+myConfig.Port+", score not sent.")
 					if myConfig.Debug {
-						fmt.Println(" Error details:", err)
-					} else {
-						fmt.Print("\n")
+						fmt.Println("[MultiDiva] Error details: ", err)
 					}
 				}
 			}
@@ -87,8 +85,12 @@ func ReceiveScore() {
 			mLen, err := connection.Read(buffer)
 			if err != nil {
 				fmt.Println("[MultiDiva] Error receiving score from " + myConfig.ServerAddress + ":" + myConfig.Port + ".")
+				if strings.Contains(err.Error(), "An existing connection was forcibly closed by the remote host") || strings.Contains(err.Error(), "EOF") {
+					fmt.Println("[MultiDiva] Unexpected server closure.")
+					serverConnected = false
+				}
 				if myConfig.Debug {
-					fmt.Println(" Error details:", err.Error())
+					fmt.Println("[MultiDiva] Error details:", err.Error())
 				} else {
 					fmt.Print("\n")
 				}
@@ -99,10 +101,7 @@ func ReceiveScore() {
 			}
 
 			if serverMessage == "/closePipe" {
-				if serverConnected {
-					serverConnected = false
-					CloseClient()
-				}
+				CloseClient()
 			}
 			listening = false
 		}
@@ -110,14 +109,10 @@ func ReceiveScore() {
 }
 
 func CloseClient() {
+	serverConnected = false
 	_, err := connection.Write([]byte("/clientLogout"))
 	if err != nil {
-		fmt.Println("Error writing:", err.Error())
-	}
-	time.Sleep(10 * time.Millisecond)
-	err = connection.Close()
-	if err != nil {
-		return
+		fmt.Println("[MultiDiva] Error writing:", err.Error())
 	}
 	fmt.Println("\nGoodbye!")
 }
