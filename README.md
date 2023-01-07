@@ -1,6 +1,6 @@
 # MultiDiva
 
-Experimental multiplayer and custom leaderboard support for Hatsune Miku: Project Diva MegaMix+
+Experimental multiplayer support for Hatsune Miku: Project Diva MegaMix+
 
 ## Build instructions
 
