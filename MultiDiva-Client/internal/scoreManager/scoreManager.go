@@ -2,14 +2,13 @@ package scoreManager
 
 import "C"
 import (
+	"encoding/json"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 	"unsafe"
 
 	"github.com/ovandermeer/MultiDiva/internal/connectionManager"
-	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 )
 
 const (
@@ -23,7 +22,7 @@ const (
 	ComboAddress        = uintptr(0x1412EF578)
 )
 
-type finalGrade int64
+type FinalGrade int64
 
 const (
 	Failed = iota
@@ -34,7 +33,7 @@ const (
 	Perfect
 )
 
-type difficulty int64
+type Difficulty int64
 
 const (
 	Easy = iota
@@ -136,12 +135,12 @@ func GetFrameScore(s *ScoreData) {
 }
 
 func GetFinalScore() {
-	myScore := *((*dataTypes.DivaScore)(unsafe.Pointer(MainScoreAddress)))
-	worstCount := *((*int32)(unsafe.Pointer(WorstCounterAddress)))
+	myScore := *((*DivaScore)(unsafe.Pointer(MainScoreAddress)))
+	worstCount := *((*int)(unsafe.Pointer(WorstCounterAddress)))
 	completePercent := *((*float32)(unsafe.Pointer(CompletionAddress)))
-	PVId := *((*int32)(unsafe.Pointer(PVIdAddress)))
-	PVDiff := difficulty(*((*int32)(unsafe.Pointer(PVDiffAddress))))
-	PVGrade := finalGrade(*((*int32)(unsafe.Pointer(PVGradeAddress))))
+	PVId := *((*int)(unsafe.Pointer(PVIdAddress)))
+	PVDiff := Difficulty(*((*int)(unsafe.Pointer(PVDiffAddress))))
+	PVGrade := FinalGrade(*((*int)(unsafe.Pointer(PVGradeAddress))))
 
 	fmt.Print("Total score: ")
 	fmt.Println(myScore.TotalScore)
@@ -165,6 +164,22 @@ func GetFinalScore() {
 	fmt.Println(PVDiff)
 	fmt.Print("Grade: ")
 	fmt.Println(PVGrade)
+
+	myData, _ := json.Marshal(connectionManager.FinalScore{
+		Instruction: "finalScore",
+		TotalScore:  myScore.TotalScore,
+		Combo:       myScore.Combo,
+		Cool:        myScore.Cool,
+		Fine:        myScore.Fine,
+		Safe:        myScore.Safe,
+		Sad:         myScore.Sad,
+		Worst:       worstCount,
+		Completion:  completePercent,
+		PV:          PVId,
+		Difficulty:  PVDiff,
+		Grade:       PVGrade})
+
+	connectionManager.SendToServer(myData)
 }
 
 func NoteHit(s *ScoreData) {
@@ -180,11 +195,16 @@ func NoteHit(s *ScoreData) {
 		noteGrade = Bad
 	}
 
-	scoreString := strconv.Itoa(score)
-	fmt.Println("Score: " + scoreString)
+	fmt.Print("Score: ")
+	fmt.Println(score)
 	fmt.Print("Change in score: ")
 	fmt.Println(scoreChange)
 	fmt.Println("Note Grade: " + noteGrade)
 
-	connectionManager.SendScore(scoreString)
+	data, _ := json.Marshal(connectionManager.Note{
+		Instruction: "note",
+		Score:       score,
+	})
+
+	connectionManager.SendToServer(data)
 }

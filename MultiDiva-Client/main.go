@@ -21,7 +21,7 @@ func MultiDivaInit() {
 
 //export MainLoop
 func MainLoop() {
-	go connectionManager.ReceiveScore()
+	go connectionManager.ReceiveFromServer()
 	go scoreManager.GetFrameScore(&s)
 }
 

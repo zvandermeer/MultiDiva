@@ -1,42 +1,48 @@
 package connectionManager
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
 
-	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
+	"github.com/ovandermeer/MultiDiva/internal/configmanager"
 )
 
 const (
-	SERVER_TYPE    = "tcp"
 	CLIENT_VERSION = "0.1.0"
 )
 
 var connection net.Conn
-var myConfig dataTypes.ConfigData
+var myConfig configManager.ConfigData
 var listening bool
 var serverConnected bool
 
-func Connect(config dataTypes.ConfigData) {
+func Connect(config configManager.ConfigData) {
 	myConfig = config
 	//establish connection
 	var err error
-	if connection, err = net.Dial(SERVER_TYPE, myConfig.ServerAddress+":"+myConfig.Port); err != nil {
+	if connection, err = net.Dial("tcp", myConfig.ServerAddress+":"+myConfig.Port); err != nil {
 		fmt.Println("[MultiDiva] Error connecting to MultiDiva server'" + myConfig.ServerAddress + ":" + myConfig.Port + "', MultiDiva is not active.")
 		if myConfig.Debug {
 			fmt.Println("[MultiDiva] Error details:", err.Error())
 		}
 		serverConnected = false
 	} else {
+		myData, _ := json.Marshal(handshake{
+			instruction:   "handshake",
+			clientVersion: CLIENT_VERSION,
+			username:      config.Username,
+		})
+		SendToServer(myData)
 		serverConnected = true
 	}
 	listening = false
 }
 
-func SendScore(scoreString string) {
+func SendToServer(data []byte) {
 	if serverConnected {
-		if _, err := connection.Write([]byte(scoreString)); err != nil {
+		if _, err := connection.Write(data); err != nil {
 			fmt.Println("[MultiDiva] Error sending score to", myConfig.ServerAddress+":"+myConfig.Port+", score not sent.")
 			if myConfig.Debug {
 				fmt.Println("[MultiDiva]  Error details: ", err)
@@ -45,7 +51,7 @@ func SendScore(scoreString string) {
 	}
 }
 
-func ReceiveScore() {
+func ReceiveFromServer() {
 	if serverConnected {
 		if !listening {
 			listening = true
