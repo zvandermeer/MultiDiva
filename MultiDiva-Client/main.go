@@ -57,6 +57,6 @@ func OnScoreTrigger() {
 func main() {
 	MultiDivaInit()
 	for {
-		MainLoop()
+
 	}
 }

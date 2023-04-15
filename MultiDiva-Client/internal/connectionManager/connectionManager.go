@@ -19,7 +19,7 @@ var myConfig *dataTypes.ConfigData
 
 func ReceivingThread(receivingChannel *dataTypes.MessageData, sendingChannel *dataTypes.MessageData, connectedToServer *bool) {
 	buffer := make([]byte, 1024)
-	for {
+	for *connectedToServer {
 		mLen, err := connection.Read(buffer)
 		if err != nil {
 			fmt.Println("[MultiDiva] Error receiving score from " + myConfig.ServerAddress + ":" + myConfig.Port + ".")
@@ -36,7 +36,7 @@ func ReceivingThread(receivingChannel *dataTypes.MessageData, sendingChannel *da
 			fmt.Println("[MultiDiva] Received: ", string(serverMessage))
 		}
 
-		if string(serverMessage) == "/closePipe" {
+		if string(serverMessage) == "{\"Instruction\":\"serverClosing\"}" {
 			CloseClient(sendingChannel)
 			*connectedToServer = false
 			break
@@ -84,5 +84,5 @@ func Connect(config *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData
 }
 
 func CloseClient(sendingChannel *dataTypes.MessageData) {
-	sendingChannel.Store([]byte("/clientLogout"))
+	sendingChannel.Store([]byte("{\"Instruction\":\"clientLogout\"}"))
 }

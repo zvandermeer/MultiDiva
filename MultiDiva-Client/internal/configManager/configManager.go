@@ -17,7 +17,7 @@ func LoadConfig() (cfg dataTypes.ConfigData) {
 
 	cfg = readConfig()
 
-	if cfg.ConfigVersion > dataTypes.CurrentConfigVersion {
+	if cfg.ConfigVersion < dataTypes.CurrentConfigVersion {
 		cfg.ConfigVersion = dataTypes.CurrentConfigVersion
 		writeConfig(cfg)
 	}
@@ -34,8 +34,9 @@ func readConfig() (myConfig dataTypes.ConfigData) {
 	}
 
 	err = yaml.Unmarshal(dat, &myConfig)
-
-	fmt.Println(myConfig)
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	return
 }
@@ -47,6 +48,9 @@ func writeConfig(data dataTypes.ConfigData) {
 	}
 
 	f, err := os.Create(ConfigLocation)
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	_, err = f.Write(yamlOutput)
 	if err != nil {
