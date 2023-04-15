@@ -4,86 +4,28 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
-	"time"
+	"strconv"
 	"unsafe"
 
-	"github.com/ovandermeer/MultiDiva/internal/connectionManager"
+	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 )
 
 const (
-	MainScoreAddress    = uintptr(0x00000001412EF568)
-	WorstCounterAddress = uintptr(0x00000001416E2D40)
-	CompletionAddress   = uintptr(0x00000001412EF634)
-	PVIdAddress         = uintptr(0x00000001412C2340)
-	PVDiffAddress       = uintptr(0x00000001423157AC) // Song limit patch
-	PVGradeAddress      = uintptr(0x00000001416E2D00)
-	ScoreAddress        = uintptr(0x1412EF56C)
-	ComboAddress        = uintptr(0x1412EF578)
-)
-
-type FinalGrade int64
-
-const (
-	Failed = iota
-	Cheap
-	Standard
-	Great
-	Excellent
-	Perfect
-)
-
-type Difficulty int64
-
-const (
-	Easy = iota
-	Normal
-	Hard
-	Extreme
-	ExExtreme
-)
-
-// Due to how holds are added to the score by Diva, tracking "Bad", "Wrong Bad" and "Wrong Safe" grades isn't possible through this method
-type note string
-
-const (
-	Cool       note = "Cool"
-	Good            = "Good"
-	Safe            = "Safe"
-	Cool_Wrong      = "Wrong Cool"
-	Good_Wrong      = "Wrong Good"
-	Bad             = "Bad"
+	MainScoreAddress            = uintptr(0x00000001412EF568)
+	WorstCounterAddress         = uintptr(0x00000001416E2D40)
+	CompletionAddress           = uintptr(0x00000001412EF634)
+	PVIdAddress                 = uintptr(0x00000001412C2340)
+	SongLimitPatchPVDiffAddress = uintptr(0x00000001423157AC) // SongLimitPatch 1.02
+	VanillaPVDiffAddress        = uintptr(0x00000001412B634C) // Non-SongLimitPatch 1.02
+	PVGradeAddress              = uintptr(0x00000001416E2D00)
+	PVTitleAddress              = uintptr(0x00000001412EF228)
+	ScoreAddress                = uintptr(0x1412EF56C)
+	ComboAddress                = uintptr(0x1412EF578)
 )
 
 var oldScore int
-var totalNotes int
-var lastTotalNotes int
 
-type ScoreData struct {
-	mu          sync.RWMutex
-	score       int
-	scoreChange int
-	noteGrade   note
-	totalNotes  int
-}
-
-func (d *ScoreData) Store(score int, scoreChange int, noteGrade note, totalNotes int) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.score = score
-	d.scoreChange = scoreChange
-	d.noteGrade = noteGrade
-	d.totalNotes = totalNotes
-}
-func (d *ScoreData) Get() (int, int, note, int) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.score, d.scoreChange, d.noteGrade, d.totalNotes
-}
-
-func GetFrameScore(s *ScoreData) {
+func GetFrameScore(sendingChannel *dataTypes.MessageData) {
 	score := *((*int)(unsafe.Pointer(ScoreAddress)))
 	combo := *((*int)(unsafe.Pointer(ComboAddress)))
 
@@ -105,42 +47,68 @@ func GetFrameScore(s *ScoreData) {
 
 		updateScore := false
 
-		var noteGrade note
+		var noteGrade dataTypes.NoteGrade
 
 		switch scoreChange {
-		// Add 10 to account for possible health bonus
-		case 500, 510:
-			noteGrade = Cool
+		// Add to account for possible health bonus, or combo being added at the same time. single combo adds 10, double 20, so on. Multi notes are also
+		// accounted for. A double press at cool is worth 1000 points, but there might be a hold bonus or health bonus on top of that. Triple press
+		// at cool is worth 1500, etc.
+		case 500, 510, 520, 530, 540, 550, 1000, 1010, 1020, 1030, 1040, 1050, 1500, 1510, 1520, 1530, 1540, 1550, 2000, 2010, 2020, 2030, 2040, 2050:
+			noteGrade = dataTypes.Cool
 			updateScore = true
-		case 300, 310:
-			noteGrade = Good
+		case 300, 310, 320, 330, 340, 350, 600, 610, 620, 630, 640, 650, 900, 910, 920, 930, 940, 950, 1200, 1210, 1220, 1230, 1240, 1250:
+			noteGrade = dataTypes.Good
 			updateScore = true
-		case 100, 110:
-			noteGrade = Safe
-			updateScore = true
-		// Everything below this point causes you to lose health, so a health bonus isn't possible
-		case 250:
-			noteGrade = Cool_Wrong
-			updateScore = true
-		case 150:
-			noteGrade = Good_Wrong
-			updateScore = true
+		case 100, 110, 120, 130, 140, 200, 210, 220, 230, 240, 400, 410, 420, 430, 440:
+			if combo == 0 {
+				noteGrade = dataTypes.Safe
+				updateScore = true
+			}
+		// Everything below this point causes you to lose health, so a health bonus isn't possible. Also skipped over some values that conflict
+		// with other scores. Opted to go for the score that's more likely to happen
+		case 250, 260, 270, 280, 290, 750, 760, 770, 780, 790:
+			if combo == 0 {
+				noteGrade = dataTypes.Cool_Wrong
+				updateScore = true
+			}
+		case 150, 160, 170, 180, 190, 450, 460, 470, 480, 490:
+			if combo == 0 {
+				noteGrade = dataTypes.Good_Wrong
+				updateScore = true
+			}
 		}
 
 		if updateScore {
-			totalNotes += 1
-			s.Store(score, scoreChange, noteGrade, totalNotes)
+			scoreString := strconv.Itoa(score)
+			fmt.Println("Score: " + scoreString)
+			fmt.Print("Change in score: ")
+			fmt.Println(scoreChange)
+			fmt.Print("Note Grade:")
+			fmt.Println(noteGrade)
+
+			myData, _ := json.Marshal(dataTypes.Note{
+				Instruction: "note",
+				Score:       score,
+				Combo:       combo,
+				Grade:       noteGrade})
+
+			sendingChannel.Store(myData)
 		}
 	}
 }
 
-func GetFinalScore() {
-	myScore := *((*DivaScore)(unsafe.Pointer(MainScoreAddress)))
-	worstCount := *((*int)(unsafe.Pointer(WorstCounterAddress)))
+func GetFinalScore(cfg *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData) {
+	myScore := *((*dataTypes.DivaScore)(unsafe.Pointer(MainScoreAddress)))
+	worstCount := *((*uint32)(unsafe.Pointer(WorstCounterAddress)))
 	completePercent := *((*float32)(unsafe.Pointer(CompletionAddress)))
-	PVId := *((*int)(unsafe.Pointer(PVIdAddress)))
-	PVDiff := Difficulty(*((*int)(unsafe.Pointer(PVDiffAddress))))
-	PVGrade := FinalGrade(*((*int)(unsafe.Pointer(PVGradeAddress))))
+	PVId := *((*uint32)(unsafe.Pointer(PVIdAddress)))
+	var PVDiff int64
+	if cfg.SongLimitPatch {
+		PVDiff = int64(*((*uint32)(unsafe.Pointer(SongLimitPatchPVDiffAddress))))
+	} else {
+		PVDiff = int64(*((*uint32)(unsafe.Pointer(VanillaPVDiffAddress))))
+	}
+	PVGrade := int64(*((*uint32)(unsafe.Pointer(PVGradeAddress))))
 
 	fmt.Print("Total score: ")
 	fmt.Println(myScore.TotalScore)
@@ -165,7 +133,7 @@ func GetFinalScore() {
 	fmt.Print("Grade: ")
 	fmt.Println(PVGrade)
 
-	myData, _ := json.Marshal(connectionManager.FinalScore{
+	myData, _ := json.Marshal(dataTypes.FinalScore{
 		Instruction: "finalScore",
 		TotalScore:  myScore.TotalScore,
 		Combo:       myScore.Combo,
@@ -179,32 +147,5 @@ func GetFinalScore() {
 		Difficulty:  PVDiff,
 		Grade:       PVGrade})
 
-	connectionManager.SendToServer(myData)
-}
-
-func NoteHit(s *ScoreData) {
-	time.Sleep(10 * time.Millisecond)
-	score, scoreChange, noteGrade, myTotalNotes := s.Get()
-
-	// If the score was successfully found and grabbed by the GetFrameScore() method, then this is skipped.
-	// If not, (ie the score change is too low to differentiate between a note being hit and a hold), then
-	// grab the current value at the pointer, assume the noteGrade is bad, and continue on
-	if myTotalNotes == lastTotalNotes {
-		score = *((*int)(unsafe.Pointer(ScoreAddress)))
-		scoreChange = 0
-		noteGrade = Bad
-	}
-
-	fmt.Print("Score: ")
-	fmt.Println(score)
-	fmt.Print("Change in score: ")
-	fmt.Println(scoreChange)
-	fmt.Println("Note Grade: " + noteGrade)
-
-	data, _ := json.Marshal(connectionManager.Note{
-		Instruction: "note",
-		Score:       score,
-	})
-
-	connectionManager.SendToServer(data)
+	sendingChannel.Store(myData)
 }

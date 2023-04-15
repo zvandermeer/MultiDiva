@@ -1,12 +1,13 @@
 package connectionManager
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
 
-	"github.com/ovandermeer/MultiDiva/internal/configmanager"
+	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 )
 
 const (
@@ -14,11 +15,54 @@ const (
 )
 
 var connection net.Conn
-var myConfig configManager.ConfigData
-var listening bool
-var serverConnected bool
+var myConfig *dataTypes.ConfigData
 
-func Connect(config configManager.ConfigData) {
+func ReceivingThread(receivingChannel *dataTypes.MessageData, sendingChannel *dataTypes.MessageData, connectedToServer *bool) {
+	buffer := make([]byte, 1024)
+	for {
+		mLen, err := connection.Read(buffer)
+		if err != nil {
+			fmt.Println("[MultiDiva] Error receiving score from " + myConfig.ServerAddress + ":" + myConfig.Port + ".")
+			if strings.Contains(err.Error(), "An existing connection was forcibly closed by the remote host") || strings.Contains(err.Error(), "EOF") {
+				fmt.Println("[MultiDiva] Unexpected server closure.")
+			}
+			if myConfig.Debug {
+				fmt.Println("[MultiDiva] Error details: ", err.Error())
+			}
+			break
+		}
+		serverMessage := buffer[:mLen]
+		if myConfig.Debug {
+			fmt.Println("[MultiDiva] Received: ", string(serverMessage))
+		}
+
+		if string(serverMessage) == "/closePipe" {
+			CloseClient(sendingChannel)
+			*connectedToServer = false
+			break
+		} else {
+			receivingChannel.Store(serverMessage)
+		}
+	}
+}
+
+func SendingThread(sendingChannel *dataTypes.MessageData, connectedToServer *bool) {
+	var lastData []byte
+	for *connectedToServer {
+		incomingData := sendingChannel.Get()
+		if !bytes.Equal(incomingData, lastData) {
+			lastData = incomingData
+			if _, err := connection.Write(incomingData); err != nil {
+				fmt.Println("[MultiDiva] Error sending data to", myConfig.ServerAddress+":"+myConfig.Port+", data/score not sent.")
+				if myConfig.Debug {
+					fmt.Println("[MultiDiva]  Error details: ", err)
+				}
+			}
+		}
+	}
+}
+
+func Connect(config *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData) bool {
 	myConfig = config
 	//establish connection
 	var err error
@@ -27,64 +71,18 @@ func Connect(config configManager.ConfigData) {
 		if myConfig.Debug {
 			fmt.Println("[MultiDiva] Error details:", err.Error())
 		}
-		serverConnected = false
+		return false
 	} else {
-		myData, _ := json.Marshal(handshake{
-			instruction:   "handshake",
-			clientVersion: CLIENT_VERSION,
-			username:      config.Username,
+		myData, _ := json.Marshal(dataTypes.Handshake{
+			Instruction:   "handshake",
+			ClientVersion: CLIENT_VERSION,
+			Username:      config.Username,
 		})
-		SendToServer(myData)
-		serverConnected = true
-	}
-	listening = false
-}
-
-func SendToServer(data []byte) {
-	if serverConnected {
-		if _, err := connection.Write(data); err != nil {
-			fmt.Println("[MultiDiva] Error sending score to", myConfig.ServerAddress+":"+myConfig.Port+", score not sent.")
-			if myConfig.Debug {
-				fmt.Println("[MultiDiva]  Error details: ", err)
-			}
-		}
+		sendingChannel.Store(myData)
+		return true
 	}
 }
 
-func ReceiveFromServer() {
-	if serverConnected {
-		if !listening {
-			listening = true
-			buffer := make([]byte, 1024)
-			mLen, err := connection.Read(buffer)
-			if err != nil {
-				fmt.Println("[MultiDiva] Error receiving score from " + myConfig.ServerAddress + ":" + myConfig.Port + ".")
-				if strings.Contains(err.Error(), "An existing connection was forcibly closed by the remote host") || strings.Contains(err.Error(), "EOF") {
-					fmt.Println("[MultiDiva] Unexpected server closure.")
-					serverConnected = false
-				}
-				if myConfig.Debug {
-					fmt.Println("[MultiDiva] Error details: ", err.Error())
-				}
-			}
-			serverMessage := string(buffer[:mLen])
-			if myConfig.Debug {
-				fmt.Println("[MultiDiva] Received: ", serverMessage)
-			}
-
-			if serverMessage == "/closePipe" {
-				CloseClient()
-			}
-			listening = false
-		}
-	}
-}
-
-func CloseClient() {
-	serverConnected = false
-	_, err := connection.Write([]byte("/clientLogout"))
-	if err != nil {
-		fmt.Println("[MultiDiva] Error writing:", err.Error())
-	}
-	fmt.Println("\nGoodbye!")
+func CloseClient(sendingChannel *dataTypes.MessageData) {
+	sendingChannel.Store([]byte("/clientLogout"))
 }

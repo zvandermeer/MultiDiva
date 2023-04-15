@@ -4,28 +4,29 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 	"gopkg.in/yaml.v3"
 )
 
 var ConfigLocation string = "./MultiDiva-Config.yml"
 
-func LoadConfig() (cfg ConfigData) {
+func LoadConfig() (cfg dataTypes.ConfigData) {
 	if _, err := os.Stat(ConfigLocation); os.IsNotExist(err) {
-		writeConfig(NewConfigData())
+		writeConfig(dataTypes.NewConfigData())
 	}
 
 	cfg = readConfig()
 
-	if cfg.ConfigVersion > CurrentConfigVersion {
-		cfg.ConfigVersion = CurrentConfigVersion
+	if cfg.ConfigVersion > dataTypes.CurrentConfigVersion {
+		cfg.ConfigVersion = dataTypes.CurrentConfigVersion
 		writeConfig(cfg)
 	}
 
 	return
 }
 
-func readConfig() (myConfig ConfigData) {
-	myConfig = NewConfigData()
+func readConfig() (myConfig dataTypes.ConfigData) {
+	myConfig = dataTypes.NewConfigData()
 
 	dat, err := os.ReadFile(ConfigLocation)
 	if err != nil {
@@ -39,7 +40,7 @@ func readConfig() (myConfig ConfigData) {
 	return
 }
 
-func writeConfig(data ConfigData) {
+func writeConfig(data dataTypes.ConfigData) {
 	yamlOutput, err := yaml.Marshal(data)
 	if err != nil {
 		fmt.Println(err)
