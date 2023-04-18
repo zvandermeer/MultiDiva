@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\ImGui">
+      <UniqueIdentifier>{21c480e8-c222-41d6-8549-8f548e41ce7f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\ImGui">
+      <UniqueIdentifier>{dc8849d9-23be-48be-8ed2-52abf4dfb3fb}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -20,6 +26,30 @@
     </ClInclude>
     <ClInclude Include="deps\SigScan.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui.h">
+      <Filter>Header Files\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_impl_dx11.h">
+      <Filter>Header Files\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_impl_win32.h">
+      <Filter>Header Files\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_internal.h">
+      <Filter>Header Files\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_rectpack.h">
+      <Filter>Header Files\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_textedit.h">
+      <Filter>Header Files\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_truetype.h">
+      <Filter>Header Files\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imconfig.h">
+      <Filter>Header Files\ImGui</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -31,6 +61,27 @@
     </ClCompile>
     <ClCompile Include="deps\SigScan.cpp">
       <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\ImGui\imgui_draw.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\ImGui\imgui_impl_dx11.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\ImGui\imgui_impl_win32.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\ImGui\imgui_tables.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\ImGui\imgui_widgets.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\ImGui\imgui.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\ImGui\imgui_demo.cpp">
+      <Filter>Source Files\ImGui</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

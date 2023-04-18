@@ -1,4 +1,3 @@
-#include "pch.h"
 #include <Windows.h>
 #include "SigScan.h"
 #include <Psapi.h>

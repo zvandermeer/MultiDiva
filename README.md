@@ -6,8 +6,8 @@ Experimental multiplayer support for Hatsune Miku: Project Diva MegaMix+
 
  ### MultiDiva-Loader.dll (C++)
 
- - Install [Microsoft Visual Studio](https://visualstudio.microsoft.com/) or [Jetbrains Rider](https://www.jetbrains.com/rider/)
- - Open "MultiDiva-Loader/MultiDiva.sln" in your .NET IDE of choice
+ - Install [Microsoft Visual Studio](https://visualstudio.microsoft.com/)
+ - Open "MultiDiva-Loader/MultiDiva.sln" in Visual Studio
  - Build the solution
  - The compiled .DLL can be found in the 'x64/' directory
 
