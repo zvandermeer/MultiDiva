@@ -26,9 +26,10 @@ func NewConfigData() (config ConfigData) {
 }
 
 type Handshake struct {
-	Instruction   string
-	ClientVersion string
-	Username      string
+	Instruction        string
+	MajorClientVersion string
+	MinorClientVersion string
+	Username           string
 }
 
 type Note struct {

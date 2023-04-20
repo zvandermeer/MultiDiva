@@ -3,11 +3,17 @@ package main
 import "C"
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/ovandermeer/MultiDiva/internal/configManager"
 	"github.com/ovandermeer/MultiDiva/internal/connectionManager"
 	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 	"github.com/ovandermeer/MultiDiva/internal/scoreManager"
+)
+
+const (
+	MajorClientVersion = 0
+	MinorClientVersion = 1
 )
 
 var cfg dataTypes.ConfigData
@@ -19,13 +25,13 @@ var connectedToServer bool
 
 //export MultiDivaInit
 func MultiDivaInit() {
-	fmt.Println("[MultiDiva] Welcome to MultiDiva v0.0.1!")
+	fmt.Println("[MultiDiva] Welcome to MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion))
 	cfg = configManager.LoadConfig()
 
-	connectedToServer = connectionManager.Connect(&cfg, &sendingData)
+	connectedToServer = connectionManager.Connect(&cfg, &sendingData, MajorClientVersion, MinorClientVersion)
 	if connectedToServer {
 		go connectionManager.SendingThread(&sendingData, &connectedToServer)
-		go connectionManager.ReceivingThread(&receivingData, &sendingData, &connectedToServer)
+		go connectionManager.ReceivingThread(&receivingData, &sendingData, &connectedToServer, MajorClientVersion)
 	}
 }
 

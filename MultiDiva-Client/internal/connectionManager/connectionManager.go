@@ -5,20 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 )
 
-const (
-	CLIENT_VERSION = "0.1.0"
-)
-
 var connection net.Conn
 var myConfig *dataTypes.ConfigData
 
-func ReceivingThread(receivingChannel *dataTypes.MessageData, sendingChannel *dataTypes.MessageData, connectedToServer *bool) {
+func ReceivingThread(receivingChannel *dataTypes.MessageData, sendingChannel *dataTypes.MessageData, connectedToServer *bool, MajorClientVersion int) {
 	buffer := make([]byte, 1024)
+receivingLoop:
 	for *connectedToServer {
 		mLen, err := connection.Read(buffer)
 		if err != nil {
@@ -34,6 +32,36 @@ func ReceivingThread(receivingChannel *dataTypes.MessageData, sendingChannel *da
 		serverMessage := buffer[:mLen]
 		if myConfig.Debug {
 			fmt.Println("[MultiDiva] Received: ", string(serverMessage))
+		}
+
+		var dat map[string]interface{}
+
+		if err := json.Unmarshal(serverMessage, &dat); err != nil {
+			panic(err)
+		}
+
+		instruction := dat["Instruction"].(string)
+
+		fmt.Println("INSTRUCTION: " + instruction)
+
+		switch instruction {
+		case "serverClosing":
+			CloseClient(sendingChannel)
+			*connectedToServer = false
+			break receivingLoop
+		case "roomNotFound":
+			fmt.Println("Room not found")
+		case "invalidLogin":
+			fmt.Println("Unknown error")
+		case "versionMismatch":
+			MajorServerVersion, _ := strconv.Atoi(dat["MajorServerVersion"].(string))
+			if MajorServerVersion > MajorClientVersion {
+				fmt.Println("Please update client")
+			} else {
+				fmt.Println("Please update server")
+			}
+		default:
+			receivingChannel.Store(serverMessage)
 		}
 
 		if string(serverMessage) == "{\"Instruction\":\"serverClosing\"}" {
@@ -62,7 +90,7 @@ func SendingThread(sendingChannel *dataTypes.MessageData, connectedToServer *boo
 	}
 }
 
-func Connect(config *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData) bool {
+func Connect(config *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData, MajorClientVersion int, MinorClientVersion int) bool {
 	myConfig = config
 	//establish connection
 	var err error
@@ -74,9 +102,10 @@ func Connect(config *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData
 		return false
 	} else {
 		myData, _ := json.Marshal(dataTypes.Handshake{
-			Instruction:   "handshake",
-			ClientVersion: CLIENT_VERSION,
-			Username:      config.Username,
+			Instruction:        "login",
+			MajorClientVersion: strconv.Itoa(MajorClientVersion),
+			MinorClientVersion: strconv.Itoa(MinorClientVersion),
+			Username:           config.Username,
 		})
 		sendingChannel.Store(myData)
 		return true
