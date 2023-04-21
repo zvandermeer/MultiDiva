@@ -1,7 +1,6 @@
 package dataTypes
 
 import (
-	"strings"
 	"sync"
 )
 
@@ -25,45 +24,34 @@ func NewConfigData() (config ConfigData) {
 	return
 }
 
-type Handshake struct {
-	Instruction        string
-	MajorClientVersion string
-	MinorClientVersion string
-	Username           string
-}
+// type Handshake struct {
+// 	Instruction        string
+// 	MajorClientVersion string
+// 	MinorClientVersion string
+// 	Username           string
+// }
 
-type Note struct {
-	Instruction string
-	Score       int
-	Combo       int
-	Grade       NoteGrade
-}
+// type Note struct {
+// 	Instruction string
+// 	Score       int
+// 	Combo       int
+// 	Grade       NoteGrade
+// }
 
-type FinalScore struct {
-	Instruction string
-	TotalScore  uint32
-	Combo       uint32
-	Cool        uint32
-	Fine        uint32
-	Safe        uint32
-	Sad         uint32
-	Worst       uint32
-	Completion  float32
-	PV          uint32
-	Difficulty  int64
-	Grade       int64
-}
-
-func encode(input []string) (output string) {
-	for i := 0; i < len(input); i++ {
-		output = output + input[i] + ","
-	}
-	return
-}
-
-func decode(input string) []string {
-	return strings.Split(input, ",")
-}
+// type FinalScore struct {
+// 	Instruction string
+// 	TotalScore  uint32
+// 	Combo       uint32
+// 	Cool        uint32
+// 	Fine        uint32
+// 	Safe        uint32
+// 	Sad         uint32
+// 	Worst       uint32
+// 	Completion  float32
+// 	PV          uint32
+// 	Difficulty  int64
+// 	Grade       int64
+// }
 
 type DivaScore struct {
 	TotalScore     uint32

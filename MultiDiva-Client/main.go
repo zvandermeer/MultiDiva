@@ -6,9 +6,7 @@ import (
 	"strconv"
 
 	"github.com/ovandermeer/MultiDiva/internal/configManager"
-	"github.com/ovandermeer/MultiDiva/internal/connectionManager"
 	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
-	"github.com/ovandermeer/MultiDiva/internal/scoreManager"
 )
 
 const (
@@ -25,20 +23,20 @@ var connectedToServer bool
 
 //export MultiDivaInit
 func MultiDivaInit() {
-	fmt.Println("[MultiDiva] Welcome to MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion))
+	fmt.Println("[MultiDiva] Initializing MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "...")
 	cfg = configManager.LoadConfig()
 
-	connectedToServer = connectionManager.Connect(&cfg, &sendingData, MajorClientVersion, MinorClientVersion)
+	connectedToServer = Connect(&cfg, &sendingData)
 	if connectedToServer {
-		go connectionManager.SendingThread(&sendingData, &connectedToServer)
-		go connectionManager.ReceivingThread(&receivingData, &sendingData, &connectedToServer, MajorClientVersion)
+		go SendingThread(&sendingData, &connectedToServer)
+		go ReceivingThread(&receivingData, &sendingData, &connectedToServer)
 	}
 }
 
 //export MainLoop
 func MainLoop() {
 	if connectedToServer {
-		go scoreManager.GetFrameScore(&sendingData)
+		go GetFrameScore(&sendingData)
 	}
 }
 
@@ -51,12 +49,12 @@ func SongUpdate(songID C.int, isPractice bool) {
 
 //export MultiDivaDispose
 func MultiDivaDispose() {
-	connectionManager.CloseClient(&sendingData)
+	CloseClient(&sendingData)
 }
 
 //export OnScoreTrigger
 func OnScoreTrigger() {
-	go scoreManager.GetFinalScore(&cfg, &sendingData)
+	go GetFinalScore(&cfg, &sendingData)
 }
 
 // use for debugging without diva running

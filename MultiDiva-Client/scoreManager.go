@@ -1,4 +1,4 @@
-package scoreManager
+package main
 
 import "C"
 import (
@@ -86,11 +86,11 @@ func GetFrameScore(sendingChannel *dataTypes.MessageData) {
 			fmt.Print("Note Grade:")
 			fmt.Println(noteGrade)
 
-			myData, _ := json.Marshal(dataTypes.Note{
-				Instruction: "note",
-				Score:       score,
-				Combo:       combo,
-				Grade:       noteGrade})
+			myData, _ := json.Marshal(map[string]string{
+				"Instruction": "note",
+				"Score":       strconv.Itoa(score),
+				"Combo":       strconv.Itoa(combo),
+				"Grade":       string(noteGrade)})
 
 			sendingChannel.Store(myData)
 		}
@@ -133,19 +133,19 @@ func GetFinalScore(cfg *dataTypes.ConfigData, sendingChannel *dataTypes.MessageD
 	fmt.Print("Grade: ")
 	fmt.Println(PVGrade)
 
-	myData, _ := json.Marshal(dataTypes.FinalScore{
-		Instruction: "finalScore",
-		TotalScore:  myScore.TotalScore,
-		Combo:       myScore.Combo,
-		Cool:        myScore.Cool,
-		Fine:        myScore.Fine,
-		Safe:        myScore.Safe,
-		Sad:         myScore.Sad,
-		Worst:       worstCount,
-		Completion:  completePercent,
-		PV:          PVId,
-		Difficulty:  PVDiff,
-		Grade:       PVGrade})
+	myData, _ := json.Marshal(map[string]string{
+		"Instruction": "finalScore",
+		"TotalScore":  strconv.FormatUint(uint64(myScore.TotalScore), 10),
+		"Combo":       strconv.FormatUint(uint64(myScore.Combo), 10),
+		"Cool":        strconv.FormatUint(uint64(myScore.Cool), 10),
+		"Fine":        strconv.FormatUint(uint64(myScore.Fine), 10),
+		"Safe":        strconv.FormatUint(uint64(myScore.Safe), 10),
+		"Sad":         strconv.FormatUint(uint64(myScore.Sad), 10),
+		"Worst":       strconv.FormatUint(uint64(worstCount), 10),
+		"Completion":  strconv.FormatUint(uint64(completePercent), 10),
+		"PV":          strconv.FormatUint(uint64(PVId), 10),
+		"Difficulty":  strconv.FormatUint(uint64(PVDiff), 10),
+		"Grade":       strconv.FormatUint(uint64(PVGrade), 10)})
 
 	sendingChannel.Store(myData)
 }

@@ -1,4 +1,4 @@
-package connectionManager
+package main
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 var connection net.Conn
 var myConfig *dataTypes.ConfigData
 
-func ReceivingThread(receivingChannel *dataTypes.MessageData, sendingChannel *dataTypes.MessageData, connectedToServer *bool, MajorClientVersion int) {
+func ReceivingThread(receivingChannel *dataTypes.MessageData, sendingChannel *dataTypes.MessageData, connectedToServer *bool) {
 	buffer := make([]byte, 1024)
 receivingLoop:
 	for *connectedToServer {
@@ -63,14 +63,6 @@ receivingLoop:
 		default:
 			receivingChannel.Store(serverMessage)
 		}
-
-		if string(serverMessage) == "{\"Instruction\":\"serverClosing\"}" {
-			CloseClient(sendingChannel)
-			*connectedToServer = false
-			break
-		} else {
-			receivingChannel.Store(serverMessage)
-		}
 	}
 }
 
@@ -80,6 +72,7 @@ func SendingThread(sendingChannel *dataTypes.MessageData, connectedToServer *boo
 		incomingData := sendingChannel.Get()
 		if !bytes.Equal(incomingData, lastData) {
 			lastData = incomingData
+			fmt.Println("Sending: '" + string(incomingData) + "'")
 			if _, err := connection.Write(incomingData); err != nil {
 				fmt.Println("[MultiDiva] Error sending data to", myConfig.ServerAddress+":"+myConfig.Port+", data/score not sent.")
 				if myConfig.Debug {
@@ -90,7 +83,7 @@ func SendingThread(sendingChannel *dataTypes.MessageData, connectedToServer *boo
 	}
 }
 
-func Connect(config *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData, MajorClientVersion int, MinorClientVersion int) bool {
+func Connect(config *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData) bool {
 	myConfig = config
 	//establish connection
 	var err error
@@ -101,11 +94,13 @@ func Connect(config *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData
 		}
 		return false
 	} else {
-		myData, _ := json.Marshal(dataTypes.Handshake{
-			Instruction:        "login",
-			MajorClientVersion: strconv.Itoa(MajorClientVersion),
-			MinorClientVersion: strconv.Itoa(MinorClientVersion),
-			Username:           config.Username,
+		// m :=
+
+		myData, _ := json.Marshal(map[string]string{
+			"Instruction":        "login",
+			"MajorClientVersion": strconv.Itoa(MajorClientVersion),
+			"MinorClientVersion": strconv.Itoa(MinorClientVersion),
+			"Username":           config.Username,
 		})
 		sendingChannel.Store(myData)
 		return true
