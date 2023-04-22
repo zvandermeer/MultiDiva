@@ -11,26 +11,28 @@ import (
 	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 )
 
-var connection net.Conn
-var myConfig *dataTypes.ConfigData
+var Connection net.Conn
+var SendingChannel = make(chan []byte, 100)
+var SendingMutex = dataTypes.MessageData{}
 
-func ReceivingThread(receivingChannel *dataTypes.MessageData, sendingChannel *dataTypes.MessageData, connectedToServer *bool) {
+func ReceivingThread() {
 	buffer := make([]byte, 1024)
 receivingLoop:
-	for *connectedToServer {
-		mLen, err := connection.Read(buffer)
+	for connectedToServer {
+		fmt.Println("Waiting to read connection...")
+		mLen, err := Connection.Read(buffer)
 		if err != nil {
-			fmt.Println("[MultiDiva] Error receiving score from " + myConfig.ServerAddress + ":" + myConfig.Port + ".")
+			fmt.Println("[MultiDiva] Error receiving score from " + cfg.ServerAddress + ":" + cfg.Port + ".")
 			if strings.Contains(err.Error(), "An existing connection was forcibly closed by the remote host") || strings.Contains(err.Error(), "EOF") {
 				fmt.Println("[MultiDiva] Unexpected server closure.")
 			}
-			if myConfig.Debug {
+			if cfg.Debug {
 				fmt.Println("[MultiDiva] Error details: ", err.Error())
 			}
 			break
 		}
 		serverMessage := buffer[:mLen]
-		if myConfig.Debug {
+		if cfg.Debug {
 			fmt.Println("[MultiDiva] Received: ", string(serverMessage))
 		}
 
@@ -46,8 +48,8 @@ receivingLoop:
 
 		switch instruction {
 		case "serverClosing":
-			CloseClient(sendingChannel)
-			*connectedToServer = false
+			CloseClient()
+			connectedToServer = false
 			break receivingLoop
 		case "roomNotFound":
 			fmt.Println("Room not found")
@@ -60,36 +62,55 @@ receivingLoop:
 			} else {
 				fmt.Println("Please update server")
 			}
+		case "note":
+			fmt.Println("NOTED")
+			fmt.Println(dat)
 		default:
-			receivingChannel.Store(serverMessage)
+			// SendingMutex.Store(serverMessage)
+			fmt.Println("Unknown command")
+			fmt.Println(dat)
 		}
 	}
 }
 
-func SendingThread(sendingChannel *dataTypes.MessageData, connectedToServer *bool) {
+func SendingThread() {
 	var lastData []byte
-	for *connectedToServer {
-		incomingData := sendingChannel.Get()
-		if !bytes.Equal(incomingData, lastData) {
-			lastData = incomingData
+	for connectedToServer {
+		select {
+		case incomingData := <-SendingChannel: // If the channel has been written to, send that. Otherwise, fallback to the mutex
+			fmt.Println("ChannelData")
 			fmt.Println("Sending: '" + string(incomingData) + "'")
-			if _, err := connection.Write(incomingData); err != nil {
-				fmt.Println("[MultiDiva] Error sending data to", myConfig.ServerAddress+":"+myConfig.Port+", data/score not sent.")
-				if myConfig.Debug {
+
+			if _, err := Connection.Write(incomingData); err != nil {
+				fmt.Println("[MultiDiva] Error sending data to", cfg.ServerAddress+":"+cfg.Port+", data/score not sent.")
+				if cfg.Debug {
 					fmt.Println("[MultiDiva]  Error details: ", err)
+				}
+			}
+
+		default:
+			incomingData := SendingMutex.Get()
+			if !bytes.Equal(incomingData, lastData) {
+				lastData = incomingData
+				fmt.Println("Sending: '" + string(incomingData) + "'")
+
+				if _, err := Connection.Write(incomingData); err != nil {
+					fmt.Println("[MultiDiva] Error sending data to", cfg.ServerAddress+":"+cfg.Port+", data/score not sent.")
+					if cfg.Debug {
+						fmt.Println("[MultiDiva]  Error details: ", err)
+					}
 				}
 			}
 		}
 	}
 }
 
-func Connect(config *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData) bool {
-	myConfig = config
+func Connect(serverAddress string, serverPort string) bool {
 	//establish connection
 	var err error
-	if connection, err = net.Dial("tcp", myConfig.ServerAddress+":"+myConfig.Port); err != nil {
-		fmt.Println("[MultiDiva] Error connecting to MultiDiva server'" + myConfig.ServerAddress + ":" + myConfig.Port + "', MultiDiva is not active.")
-		if myConfig.Debug {
+	if Connection, err = net.Dial("tcp", serverAddress+":"+serverPort); err != nil {
+		fmt.Println("[MultiDiva] Error connecting to MultiDiva server'" + cfg.ServerAddress + ":" + cfg.Port + "', MultiDiva is not active.")
+		if cfg.Debug {
 			fmt.Println("[MultiDiva] Error details:", err.Error())
 		}
 		return false
@@ -100,13 +121,13 @@ func Connect(config *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData
 			"Instruction":        "login",
 			"MajorClientVersion": strconv.Itoa(MajorClientVersion),
 			"MinorClientVersion": strconv.Itoa(MinorClientVersion),
-			"Username":           config.Username,
+			"Username":           cfg.Username,
 		})
-		sendingChannel.Store(myData)
+		SendingChannel <- myData
 		return true
 	}
 }
 
-func CloseClient(sendingChannel *dataTypes.MessageData) {
-	sendingChannel.Store([]byte("{\"Instruction\":\"clientLogout\"}"))
+func CloseClient() {
+	SendingChannel <- []byte("{\"Instruction\":\"clientLogout\"}")
 }

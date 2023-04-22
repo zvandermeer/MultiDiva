@@ -93,6 +93,9 @@ LRESULT __stdcall WndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 bool show_menu = true;
 bool show_my_menu = true;
 bool show_canvas = false;
+bool show_fullscreen_menu = false;
+bool keyPressed = false;
+bool publicRoom = true;
 float speed = 0.5;
 
 bool init = false;
@@ -101,8 +104,172 @@ ID3D11Device* p_device = NULL;
 ID3D11DeviceContext* p_context = NULL;
 ID3D11RenderTargetView* mainRenderTargetView = NULL;
 
-static char str0[128] = "Hello, world!";
-static char str1[128] = "Hello, world!";
+static char serverAddress[128] = "";
+static char serverPort[5] = "9988";
+static char roomName[128] = "";
+static char myEpicString[128] = "Hello from C++!";
+
+
+// Mod Library
+HMODULE m_Library;
+
+// Mod Types
+typedef void(__cdecl* _OnInit)();
+typedef void(__cdecl* _OnDispose)();
+typedef void(__cdecl* _OnSongUpdate)(int songId, bool isPractice);
+typedef void(__cdecl* _MainLoop)();
+typedef void(__cdecl* _OnScoreTrigger)();
+typedef int(__cdecl* _TestFunc)();
+typedef const char* (__cdecl* _StringTest)(std::string roomTitle, bool isPublic);
+typedef bool(__cdecl* _ConnectToServer)(const char* serverAddress, const char* serverPort);
+typedef void(__cdecl* _ConnectToRoom)(const char* roomName);
+typedef void(__cdecl* _CreateRoom)(const char* roomName, bool publicRoom);
+
+
+// Mod Functions
+_OnInit p_OnInit;
+_OnDispose p_OnDispose;
+_OnSongUpdate p_OnSongUpdate;
+_MainLoop p_MainLoop;
+_OnScoreTrigger p_OnScoreTrigger;
+_TestFunc p_TestFunc;
+_StringTest p_StringTest;
+_ConnectToServer p_ConnectToServer;
+_ConnectToRoom p_ConnectToRoom;
+_CreateRoom p_CreateRoom;
+// _OnNoteHit p_OnNoteHit;
+
+/*
+ * Signatures
+ */
+
+
+ // 1.02: 0x14043B2D0 (Braasileiro)
+ // 1.03: 0x14043B310 (Braasileiro)
+void* sigSongStart = sigScan(
+	"\x8B\xD1\xE9\xA9\xE8\xFF\xFF\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xE9",
+	"xxxxxxx?????????x"
+);
+
+// 1.02: 0x1401E7A60 (Braasileiro)
+// 1.03: 0x1401E7A70 (Braasileiro)
+void* sigSongPracticeStart = sigScan(
+	"\xE9\x00\x00\x00\x00\x58\x3C\xB4",
+	"x????xxx"
+);
+
+// 1.02: 0x14043B000 (Braasileiro)
+void* sigSongEnd = sigScan(
+	"\x48\x89\x5C\x24\x08\x57\x48\x83\xEC\x20\x48\x8D\x0D\xCC\xCC\xCC\xCC\xE8\xCC\xCC\xCC\xCC\x48\x8B\x3D\xCC\xCC\xCC\xCC\x48\x8B\x1F\x48\x3B\xDF",
+	"xxxxxxxxxxxxx????x????xxx????xxxxxx"
+);
+
+// 1.02 (RocketRacer)
+void* DivaScoreTrigger = sigScan(
+	"\x48\x89\x5C\x24\x00\x48\x89\x74\x24\x00\x48\x89\x7C\x24\x00\x55\x41\x54\x41\x55\x41\x56\x41\x57\x48\x8B\xEC\x48\x83\xEC\x60\x48\x8B\x05\x00\x00\x00\x00\x48\x33\xC4\x48\x89\x45\xF8\x48\x8B\xF9\x80\xB9\x00\x00\x00\x00\x00\x0F\x85\x00\x00\x00\x00",
+	"xxxx?xxxx?xxxx?xxxxxxxxxxxxxxxxxxx????xxxxxxxxxxxx?????xx????"
+);
+
+// 1.02: 0x14024319F
+// void* sigNoteHit = sigScan(
+//     "\x44\x0f\xb6\x65\x00\x44\x88\x64\x24",
+//     "xxxx?xxxx"
+// );
+
+/*
+ * Hooks
+ */
+HOOK(void, __fastcall, _SongStart, sigSongStart, int songId)
+{
+	if (m_Library)
+	{
+		// Playing
+		p_OnSongUpdate(songId, false);
+	}
+
+	original_SongStart(songId);
+}
+
+HOOK(__int64, __fastcall, _SongPracticeStart, sigSongPracticeStart, __int64 a1, __int64 a2)
+{
+	if (m_Library)
+	{
+		// Practicing
+		p_OnSongUpdate(0, true);
+	}
+
+	return original_SongPracticeStart(a1, a2);
+}
+
+HOOK(__int64, __stdcall, _SongEnd, sigSongEnd)
+{
+	if (m_Library)
+	{
+		// In Menu
+		p_OnSongUpdate(0, false);
+	}
+
+	return original_SongEnd();
+}
+
+HOOK(int, __fastcall, _PrintResult, DivaScoreTrigger, int a1) {
+
+	if (m_Library) {
+		p_OnScoreTrigger();
+	}
+
+	return original_PrintResult(a1);
+}
+
+/*
+ * ModLoader
+ */
+extern "C" __declspec(dllexport) void Init()
+{
+	// Load Mod Library
+	m_Library = LoadLibraryA("MultiDiva-Client.dll");
+
+	if (m_Library)
+	{
+		// Mod Function Pointers
+		p_OnInit = (_OnInit)GetProcAddress(m_Library, "MultiDivaInit");
+		p_OnDispose = (_OnDispose)GetProcAddress(m_Library, "MultiDivaDispose");
+		p_OnSongUpdate = (_OnSongUpdate)GetProcAddress(m_Library, "SongUpdate");
+		p_MainLoop = (_MainLoop)GetProcAddress(m_Library, "MainLoop");
+		p_OnScoreTrigger = (_OnScoreTrigger)GetProcAddress(m_Library, "OnScoreTrigger");
+		p_TestFunc = (_TestFunc)GetProcAddress(m_Library, "TestFunc");
+		p_StringTest = (_StringTest)GetProcAddress(m_Library, "StringTest");
+		p_ConnectToServer = (_ConnectToServer)GetProcAddress(m_Library, "ConnectToServer");
+		p_ConnectToRoom = (_ConnectToRoom)GetProcAddress(m_Library, "JoinRoom");
+		p_CreateRoom = (_CreateRoom)GetProcAddress(m_Library, "CreateRoom");
+
+		// p_OnNoteHit = (_OnNoteHit)GetProcAddress(m_Library, "OnNoteHit");
+
+		//get_present_pointer();
+
+		// Install Hooks
+		INSTALL_HOOK(_SongStart);
+		INSTALL_HOOK(_SongEnd);
+		INSTALL_HOOK(_SongPracticeStart);
+		INSTALL_HOOK(_PrintResult);
+		// INSTALL_HOOK(_NoteHit);
+
+		strncpy_s(myEpicString, p_StringTest("Hello from C++!", true), sizeof(myEpicString));
+
+		//myEpicString = p_StringTest("Test123", true);
+
+		// Mod Entry Point
+		p_OnInit();
+
+		/*int foo = p_TestFunc();*/
+	}
+}
+
+extern "C" __declspec(dllexport) void OnFrame() {
+	if (p_MainLoop) {
+		p_MainLoop();
+	}
+}
 
 static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_interval, UINT flags) {
 	if (!init) {
@@ -142,21 +309,67 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 
 	ImGui::ShowDemoWindow(); // check demo cpp
 
-	if (show_menu) {
-		ImGui::Begin("Test Env", &show_menu);
-		ImGui::SetWindowSize(ImVec2(200, 200), ImGuiCond_Always);
-		ImGui::Text("Options:");
-		ImGui::Checkbox("Canvas", &show_canvas);
-		ImGui::Checkbox("Show MultiDiva", &show_my_menu);
-		ImGui::SliderFloat("Speed", &speed, 0.01, 1);
-		ImGui::End();
-	}
-	if (show_my_menu) {
-		ImGui::Begin("MultiDiva", &show_my_menu);
-		ImGui::SetWindowSize(ImVec2(200, 200), ImGuiCond_Always);
-		ImGui::Text("Options:");
-		ImGui::InputText("input text", str0, IM_ARRAYSIZE(str0));
-		ImGui::InputText("input text2", str1, IM_ARRAYSIZE(str1));
+	//if (show_menu) {
+	//	ImGui::Begin("Test Env", &show_menu);
+	//	ImGui::SetWindowSize(ImVec2(200, 200), ImGuiCond_Always);
+	//	ImGui::Text("Options:");
+	//	ImGui::Checkbox("Canvas", &show_canvas);
+	//	ImGui::Checkbox("Show MultiDiva", &show_my_menu);
+	//	ImGui::SliderFloat("Speed", &speed, 0.01, 1);
+	//	ImGui::End();
+	//}
+	//if (show_my_menu) {
+	//	ImGui::Begin("MultiDiva", &show_my_menu);
+	//	ImGui::SetWindowSize(ImVec2(200, 200), ImGuiCond_FirstUseEver);
+	//	ImGui::Text("Options:");
+	//	ImGui::InputText("input text", str0, IM_ARRAYSIZE(str0));
+	//	ImGui::InputText("input text2", str1, IM_ARRAYSIZE(str1));
+	//	ImGui::End();
+	//}
+
+	if (show_fullscreen_menu) {
+		static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->Pos);
+		ImGui::SetNextWindowSize(viewport->Size);
+		ImGui::Begin("Test Fullscreen", &show_fullscreen_menu, flags);
+		ImGui::NewLine();
+		ImGui::Indent();
+		ImGui::Text("Fullscreen menu test!");
+		ImGui::Text(myEpicString);
+		if (ImGui::CollapsingHeader("Server")) {
+
+			if (ImGui::TreeNode("Server Connection")) {
+				ImGui::Text("Server address: ");
+				ImGui::InputText("##field1", serverAddress, IM_ARRAYSIZE(serverAddress));
+				ImGui::Text("Server port: ");
+				ImGui::InputText("##field2", serverPort, IM_ARRAYSIZE(serverPort));
+				if (ImGui::Button("Connect")) {
+					if (m_Library) {
+						p_ConnectToServer(serverAddress, serverPort);
+					}
+				}
+			}
+			if (ImGui::TreeNode("Room")) {
+				ImGui::Text("Room name: ");
+				ImGui::InputText("##field3", roomName, IM_ARRAYSIZE(roomName));
+				ImGui::Text("Public room? ");
+				ImGui::SameLine();
+				ImGui::Checkbox("##ead", &publicRoom);
+				ImGui::NewLine();
+				if (ImGui::Button("Connect##2")) {
+					if (m_Library) {
+						p_ConnectToRoom(roomName);
+					}
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Create")) {
+					if (m_Library) {
+						p_CreateRoom(roomName, true);
+					}
+				}
+			}
+		}
 		ImGui::End();
 	}
 
@@ -232,14 +445,15 @@ int WINAPI main()
 	}
 
 	while (true) {
+
 		Sleep(50);
 
-		if (GetAsyncKeyState(VK_NUMPAD0) & 1) {
-
+		if (GetAsyncKeyState(VK_F10) && !keyPressed) {
+			show_fullscreen_menu = !show_fullscreen_menu;
+			keyPressed = true;
 		}
-
-		if (GetAsyncKeyState(VK_NUMPAD1)) {
-			break;
+		if (!GetAsyncKeyState(VK_F10)) {
+			keyPressed = false;
 		}
 	}
 
@@ -265,171 +479,26 @@ int WINAPI main()
 	return 0;
 }
 
-// Mod Library
-HMODULE m_Library;
-
-// Mod Types
-typedef void(__cdecl* _OnInit)();
-typedef void(__cdecl* _OnDispose)();
-typedef void(__cdecl* _OnSongUpdate)(int songId, bool isPractice);
-typedef void(__cdecl* _MainLoop)();
-typedef void(__cdecl* _OnScoreTrigger)();
-typedef int(__cdecl* _TestFunc)();
-
-
-// Mod Functions
-_OnInit p_OnInit;
-_OnDispose p_OnDispose;
-_OnSongUpdate p_OnSongUpdate;
-_MainLoop p_MainLoop;
-_OnScoreTrigger p_OnScoreTrigger;
-_TestFunc p_TestFunc;
-// _OnNoteHit p_OnNoteHit;
-
-BOOL APIENTRY DllMain( HMODULE hModule,
-                       DWORD  ul_reason_for_call,
-                       LPVOID lpReserved
-                     )
+BOOL APIENTRY DllMain(HMODULE hModule,
+	DWORD  ul_reason_for_call,
+	LPVOID lpReserved
+)
 {
-    switch (ul_reason_for_call)
-    {
-    case DLL_PROCESS_ATTACH:
+	switch (ul_reason_for_call)
+	{
+	case DLL_PROCESS_ATTACH:
 		dll_handle = hModule;
 		CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)main, NULL, 0, NULL);
-        break;
-    case DLL_THREAD_ATTACH:
-        break;
-    case DLL_THREAD_DETACH:
-        break;
-    case DLL_PROCESS_DETACH:
-        if (m_Library) {
-            p_OnDispose();
-        }
-        break;
-    }
-    return TRUE;
-}
-
-
-/*
- * Signatures
- */
-
-
-// 1.02: 0x14043B2D0 (Braasileiro)
-// 1.03: 0x14043B310 (Braasileiro)
-void* sigSongStart = sigScan(
-    "\x8B\xD1\xE9\xA9\xE8\xFF\xFF\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xE9",
-    "xxxxxxx?????????x"
-);
-
-// 1.02: 0x1401E7A60 (Braasileiro)
-// 1.03: 0x1401E7A70 (Braasileiro)
-void* sigSongPracticeStart = sigScan(
-    "\xE9\x00\x00\x00\x00\x58\x3C\xB4",
-    "x????xxx"
-);
-
-// 1.02: 0x14043B000 (Braasileiro)
-void* sigSongEnd = sigScan(
-    "\x48\x89\x5C\x24\x08\x57\x48\x83\xEC\x20\x48\x8D\x0D\xCC\xCC\xCC\xCC\xE8\xCC\xCC\xCC\xCC\x48\x8B\x3D\xCC\xCC\xCC\xCC\x48\x8B\x1F\x48\x3B\xDF",
-    "xxxxxxxxxxxxx????x????xxx????xxxxxx"
-);
-
-// 1.02 (RocketRacer)
-void* DivaScoreTrigger = sigScan(
-    "\x48\x89\x5C\x24\x00\x48\x89\x74\x24\x00\x48\x89\x7C\x24\x00\x55\x41\x54\x41\x55\x41\x56\x41\x57\x48\x8B\xEC\x48\x83\xEC\x60\x48\x8B\x05\x00\x00\x00\x00\x48\x33\xC4\x48\x89\x45\xF8\x48\x8B\xF9\x80\xB9\x00\x00\x00\x00\x00\x0F\x85\x00\x00\x00\x00",
-    "xxxx?xxxx?xxxx?xxxxxxxxxxxxxxxxxxx????xxxxxxxxxxxx?????xx????"
-);
-
-// 1.02: 0x14024319F
-// void* sigNoteHit = sigScan(
-//     "\x44\x0f\xb6\x65\x00\x44\x88\x64\x24",
-//     "xxxx?xxxx"
-// );
-
-/*
- * Hooks
- */
-HOOK(void, __fastcall, _SongStart, sigSongStart, int songId)
-{
-    if (m_Library)
-    {
-        // Playing
-        p_OnSongUpdate(songId, false);
-    }
-
-    original_SongStart(songId);
-}
-
-HOOK(__int64, __fastcall, _SongPracticeStart, sigSongPracticeStart, __int64 a1, __int64 a2)
-{
-    if (m_Library)
-    {
-        // Practicing
-        p_OnSongUpdate(0, true);
-    }
-
-    return original_SongPracticeStart(a1, a2);
-}
-
-HOOK(__int64, __stdcall, _SongEnd, sigSongEnd)
-{
-    if (m_Library)
-    {
-        // In Menu
-        p_OnSongUpdate(0, false);
-    }
-
-    return original_SongEnd();
-}
-
-HOOK(int, __fastcall, _PrintResult, DivaScoreTrigger, int a1) {
-
-    if (m_Library) {
-        p_OnScoreTrigger();
-    }
-
-    return original_PrintResult(a1);
-}
-
-/*
- * ModLoader
- */
-extern "C" __declspec(dllexport) void Init()
-{
-    // Load Mod Library
-    m_Library = LoadLibraryA("MultiDiva-Client.dll");
-
-    if (m_Library)
-    {
-        // Mod Function Pointers
-        p_OnInit = (_OnInit)GetProcAddress(m_Library, "MultiDivaInit");
-        p_OnDispose = (_OnDispose)GetProcAddress(m_Library, "MultiDivaDispose");
-        p_OnSongUpdate = (_OnSongUpdate)GetProcAddress(m_Library, "SongUpdate");
-        p_MainLoop = (_MainLoop)GetProcAddress(m_Library, "MainLoop");
-        p_OnScoreTrigger = (_OnScoreTrigger)GetProcAddress(m_Library, "OnScoreTrigger");
-        p_TestFunc = (_TestFunc)GetProcAddress(m_Library, "TestFunc");
-        // p_OnNoteHit = (_OnNoteHit)GetProcAddress(m_Library, "OnNoteHit");
-
-		//get_present_pointer();
-
-        // Install Hooks
-        INSTALL_HOOK(_SongStart);
-        INSTALL_HOOK(_SongEnd);
-        INSTALL_HOOK(_SongPracticeStart);
-        INSTALL_HOOK(_PrintResult);
-        // INSTALL_HOOK(_NoteHit);
-
-        // Mod Entry Point
-        p_OnInit();
-
-        /*int foo = p_TestFunc();*/
-    }
-}
-
-extern "C" __declspec(dllexport) void OnFrame() {
-    if (p_MainLoop) {
-        p_MainLoop();
-    }
+		break;
+	case DLL_THREAD_ATTACH:
+		break;
+	case DLL_THREAD_DETACH:
+		break;
+	case DLL_PROCESS_DETACH:
+		if (m_Library) {
+			p_OnDispose();
+		}
+		break;
+	}
+	return TRUE;
 }

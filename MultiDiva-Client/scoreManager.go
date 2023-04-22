@@ -24,8 +24,9 @@ const (
 )
 
 var oldScore int
+var lastCombo int = -1
 
-func GetFrameScore(sendingChannel *dataTypes.MessageData) {
+func GetFrameScore() {
 	score := *((*int)(unsafe.Pointer(ScoreAddress)))
 	combo := *((*int)(unsafe.Pointer(ComboAddress)))
 
@@ -54,11 +55,15 @@ func GetFrameScore(sendingChannel *dataTypes.MessageData) {
 		// accounted for. A double press at cool is worth 1000 points, but there might be a hold bonus or health bonus on top of that. Triple press
 		// at cool is worth 1500, etc.
 		case 500, 510, 520, 530, 540, 550, 1000, 1010, 1020, 1030, 1040, 1050, 1500, 1510, 1520, 1530, 1540, 1550, 2000, 2010, 2020, 2030, 2040, 2050:
-			noteGrade = dataTypes.Cool
-			updateScore = true
+			if lastCombo < combo {
+				noteGrade = dataTypes.Cool
+				updateScore = true
+			}
 		case 300, 310, 320, 330, 340, 350, 600, 610, 620, 630, 640, 650, 900, 910, 920, 930, 940, 950, 1200, 1210, 1220, 1230, 1240, 1250:
-			noteGrade = dataTypes.Good
-			updateScore = true
+			if lastCombo < combo {
+				noteGrade = dataTypes.Good
+				updateScore = true
+			}
 		case 100, 110, 120, 130, 140, 200, 210, 220, 230, 240, 400, 410, 420, 430, 440:
 			if combo == 0 {
 				noteGrade = dataTypes.Safe
@@ -78,6 +83,8 @@ func GetFrameScore(sendingChannel *dataTypes.MessageData) {
 			}
 		}
 
+		lastCombo = combo
+
 		if updateScore {
 			scoreString := strconv.Itoa(score)
 			fmt.Println("Score: " + scoreString)
@@ -90,14 +97,14 @@ func GetFrameScore(sendingChannel *dataTypes.MessageData) {
 				"Instruction": "note",
 				"Score":       strconv.Itoa(score),
 				"Combo":       strconv.Itoa(combo),
-				"Grade":       string(noteGrade)})
+				"Grade":       fmt.Sprintf("%d", int(noteGrade))})
 
-			sendingChannel.Store(myData)
+			SendingMutex.Store(myData)
 		}
 	}
 }
 
-func GetFinalScore(cfg *dataTypes.ConfigData, sendingChannel *dataTypes.MessageData) {
+func GetFinalScore() {
 	myScore := *((*dataTypes.DivaScore)(unsafe.Pointer(MainScoreAddress)))
 	worstCount := *((*uint32)(unsafe.Pointer(WorstCounterAddress)))
 	completePercent := *((*float32)(unsafe.Pointer(CompletionAddress)))
@@ -142,10 +149,10 @@ func GetFinalScore(cfg *dataTypes.ConfigData, sendingChannel *dataTypes.MessageD
 		"Safe":        strconv.FormatUint(uint64(myScore.Safe), 10),
 		"Sad":         strconv.FormatUint(uint64(myScore.Sad), 10),
 		"Worst":       strconv.FormatUint(uint64(worstCount), 10),
-		"Completion":  strconv.FormatUint(uint64(completePercent), 10),
+		"Completion":  fmt.Sprintf("%f", completePercent),
 		"PV":          strconv.FormatUint(uint64(PVId), 10),
 		"Difficulty":  strconv.FormatUint(uint64(PVDiff), 10),
 		"Grade":       strconv.FormatUint(uint64(PVGrade), 10)})
 
-	sendingChannel.Store(myData)
+	SendingChannel <- myData
 }

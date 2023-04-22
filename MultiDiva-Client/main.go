@@ -1,9 +1,14 @@
 package main
 
+/*
+#include <stdlib.h>
+*/
 import "C"
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
+	"unsafe"
 
 	"github.com/ovandermeer/MultiDiva/internal/configManager"
 	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
@@ -16,27 +21,56 @@ const (
 
 var cfg dataTypes.ConfigData
 
-var sendingData = dataTypes.MessageData{}
-var receivingData = dataTypes.MessageData{}
-
 var connectedToServer bool
 
 //export MultiDivaInit
 func MultiDivaInit() {
 	fmt.Println("[MultiDiva] Initializing MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "...")
 	cfg = configManager.LoadConfig()
+}
 
-	connectedToServer = Connect(&cfg, &sendingData)
+//export ConnectToServer
+func ConnectToServer(serverAddress *C.char, serverPort *C.char) bool {
+	connectedToServer = Connect(C.GoString(serverAddress), C.GoString(serverPort))
+	fmt.Println("Past")
 	if connectedToServer {
-		go SendingThread(&sendingData, &connectedToServer)
-		go ReceivingThread(&receivingData, &sendingData, &connectedToServer)
+		fmt.Println("Connected!")
+		go SendingThread()
+		go ReceivingThread()
 	}
+	return connectedToServer
+}
+
+//export CreateRoom
+func CreateRoom(roomName *C.char, publicRoom bool) {
+	m := map[string]string{
+		"Instruction":       "createRoom",
+		"roomName":          C.GoString(roomName),
+		"passwordProtected": "false",
+		"publicRoom":        strconv.FormatBool(publicRoom),
+	}
+
+	data, _ := json.Marshal(m)
+
+	SendingChannel <- data
+}
+
+//export JoinRoom
+func JoinRoom(roomName *C.char) {
+	m := map[string]string{
+		"Instruction": "joinRoom",
+		"roomName":    C.GoString(roomName),
+	}
+
+	data, _ := json.Marshal(m)
+
+	SendingChannel <- data
 }
 
 //export MainLoop
 func MainLoop() {
 	if connectedToServer {
-		go GetFrameScore(&sendingData)
+		go GetFrameScore()
 	}
 }
 
@@ -49,17 +83,42 @@ func SongUpdate(songID C.int, isPractice bool) {
 
 //export MultiDivaDispose
 func MultiDivaDispose() {
-	CloseClient(&sendingData)
+	CloseClient()
 }
 
 //export OnScoreTrigger
 func OnScoreTrigger() {
-	go GetFinalScore(&cfg, &sendingData)
+	go GetFinalScore()
+}
+
+//export StringTest
+func StringTest(ctitle *C.char, test bool) *C.char {
+	// ctitle := C.CString(title)
+	fmt.Println(C.GoString(ctitle))
+	fmt.Println(strconv.FormatBool(test))
+	// defer C.free(unsafe.Pointer(ctitle))
+
+	return C.CString("Hello from go!")
 }
 
 // use for debugging without diva running
 func main() {
 	MultiDivaInit()
+
+	myCString := C.CString("localhost")
+	myCString2 := C.CString("9988")
+
+	ConnectToServer(myCString, myCString2)
+
+	C.free(unsafe.Pointer(myCString))
+	C.free(unsafe.Pointer(myCString2))
+
+	myCString3 := C.CString("TestRoom")
+
+	JoinRoom(myCString3)
+
+	C.free(unsafe.Pointer(myCString3))
+
 	for {
 
 	}

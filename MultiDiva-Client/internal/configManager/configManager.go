@@ -22,6 +22,8 @@ func LoadConfig() (cfg dataTypes.ConfigData) {
 		writeConfig(cfg)
 	}
 
+	fmt.Println(cfg)
+
 	return
 }
 
