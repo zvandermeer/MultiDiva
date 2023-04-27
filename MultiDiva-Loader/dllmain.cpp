@@ -89,13 +89,13 @@ LRESULT __stdcall WndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 	return CallWindowProc(oWndProc, hWnd, uMsg, wParam, lParam);
 }
 
-
 bool show_menu = true;
 bool show_my_menu = true;
 bool show_canvas = false;
 bool show_fullscreen_menu = false;
 bool keyPressed = false;
 bool publicRoom = true;
+bool* connectedToServer;
 float speed = 0.5;
 
 bool init = false;
@@ -114,15 +114,15 @@ static char myEpicString[128] = "Hello from C++!";
 HMODULE m_Library;
 
 // Mod Types
-typedef void(__cdecl* _OnInit)();
+typedef bool*(__cdecl* _OnInit)();
 typedef void(__cdecl* _OnDispose)();
 typedef void(__cdecl* _OnSongUpdate)(int songId, bool isPractice);
 typedef void(__cdecl* _MainLoop)();
 typedef void(__cdecl* _OnScoreTrigger)();
-typedef int(__cdecl* _TestFunc)();
 typedef const char* (__cdecl* _StringTest)(std::string roomTitle, bool isPublic);
-typedef bool(__cdecl* _ConnectToServer)(const char* serverAddress, const char* serverPort);
-typedef void(__cdecl* _ConnectToRoom)(const char* roomName);
+typedef void(__cdecl* _ConnectToServer)(const char* serverAddress, const char* serverPort);
+typedef void(__cdecl* _LeaveServer)();
+typedef void(__cdecl* _JoinRoom)(const char* roomName);
 typedef void(__cdecl* _CreateRoom)(const char* roomName, bool publicRoom);
 
 
@@ -132,12 +132,11 @@ _OnDispose p_OnDispose;
 _OnSongUpdate p_OnSongUpdate;
 _MainLoop p_MainLoop;
 _OnScoreTrigger p_OnScoreTrigger;
-_TestFunc p_TestFunc;
 _StringTest p_StringTest;
 _ConnectToServer p_ConnectToServer;
-_ConnectToRoom p_ConnectToRoom;
+_LeaveServer p_LeaveServer;
+_JoinRoom p_JoinRoom;
 _CreateRoom p_CreateRoom;
-// _OnNoteHit p_OnNoteHit;
 
 /*
  * Signatures
@@ -169,12 +168,6 @@ void* DivaScoreTrigger = sigScan(
 	"\x48\x89\x5C\x24\x00\x48\x89\x74\x24\x00\x48\x89\x7C\x24\x00\x55\x41\x54\x41\x55\x41\x56\x41\x57\x48\x8B\xEC\x48\x83\xEC\x60\x48\x8B\x05\x00\x00\x00\x00\x48\x33\xC4\x48\x89\x45\xF8\x48\x8B\xF9\x80\xB9\x00\x00\x00\x00\x00\x0F\x85\x00\x00\x00\x00",
 	"xxxx?xxxx?xxxx?xxxxxxxxxxxxxxxxxxx????xxxxxxxxxxxx?????xx????"
 );
-
-// 1.02: 0x14024319F
-// void* sigNoteHit = sigScan(
-//     "\x44\x0f\xb6\x65\x00\x44\x88\x64\x24",
-//     "xxxx?xxxx"
-// );
 
 /*
  * Hooks
@@ -221,6 +214,7 @@ HOOK(int, __fastcall, _PrintResult, DivaScoreTrigger, int a1) {
 	return original_PrintResult(a1);
 }
 
+
 /*
  * ModLoader
  */
@@ -237,31 +231,22 @@ extern "C" __declspec(dllexport) void Init()
 		p_OnSongUpdate = (_OnSongUpdate)GetProcAddress(m_Library, "SongUpdate");
 		p_MainLoop = (_MainLoop)GetProcAddress(m_Library, "MainLoop");
 		p_OnScoreTrigger = (_OnScoreTrigger)GetProcAddress(m_Library, "OnScoreTrigger");
-		p_TestFunc = (_TestFunc)GetProcAddress(m_Library, "TestFunc");
 		p_StringTest = (_StringTest)GetProcAddress(m_Library, "StringTest");
 		p_ConnectToServer = (_ConnectToServer)GetProcAddress(m_Library, "ConnectToServer");
-		p_ConnectToRoom = (_ConnectToRoom)GetProcAddress(m_Library, "JoinRoom");
+		p_LeaveServer = (_LeaveServer)GetProcAddress(m_Library, "LeaveServer");
+		p_JoinRoom = (_JoinRoom)GetProcAddress(m_Library, "JoinRoom");
 		p_CreateRoom = (_CreateRoom)GetProcAddress(m_Library, "CreateRoom");
-
-		// p_OnNoteHit = (_OnNoteHit)GetProcAddress(m_Library, "OnNoteHit");
-
-		//get_present_pointer();
 
 		// Install Hooks
 		INSTALL_HOOK(_SongStart);
 		INSTALL_HOOK(_SongEnd);
 		INSTALL_HOOK(_SongPracticeStart);
 		INSTALL_HOOK(_PrintResult);
-		// INSTALL_HOOK(_NoteHit);
 
 		strncpy_s(myEpicString, p_StringTest("Hello from C++!", true), sizeof(myEpicString));
 
-		//myEpicString = p_StringTest("Test123", true);
-
 		// Mod Entry Point
-		p_OnInit();
-
-		/*int foo = p_TestFunc();*/
+		connectedToServer = p_OnInit();
 	}
 }
 
@@ -338,37 +323,49 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 		ImGui::Text("Fullscreen menu test!");
 		ImGui::Text(myEpicString);
 		if (ImGui::CollapsingHeader("Server")) {
-
-			if (ImGui::TreeNode("Server Connection")) {
-				ImGui::Text("Server address: ");
-				ImGui::InputText("##field1", serverAddress, IM_ARRAYSIZE(serverAddress));
-				ImGui::Text("Server port: ");
-				ImGui::InputText("##field2", serverPort, IM_ARRAYSIZE(serverPort));
+			ImGui::Text("Server address: ");
+			ImGui::InputText("##serverAddressInput", serverAddress, IM_ARRAYSIZE(serverAddress));
+			ImGui::Text("Server port: ");
+			ImGui::InputText("##serverPortInput", serverPort, IM_ARRAYSIZE(serverPort));
+			if (!*connectedToServer) {
 				if (ImGui::Button("Connect")) {
 					if (m_Library) {
 						p_ConnectToServer(serverAddress, serverPort);
 					}
 				}
 			}
-			if (ImGui::TreeNode("Room")) {
-				ImGui::Text("Room name: ");
-				ImGui::InputText("##field3", roomName, IM_ARRAYSIZE(roomName));
-				ImGui::Text("Public room? ");
-				ImGui::SameLine();
-				ImGui::Checkbox("##ead", &publicRoom);
-				ImGui::NewLine();
-				if (ImGui::Button("Connect##2")) {
+			else {
+				if (ImGui::Button("Disconnect")) {
 					if (m_Library) {
-						p_ConnectToRoom(roomName);
-					}
-				}
-				ImGui::SameLine();
-				if (ImGui::Button("Create")) {
-					if (m_Library) {
-						p_CreateRoom(roomName, true);
+						p_LeaveServer();
 					}
 				}
 			}
+		}
+		if (!*connectedToServer) {
+			ImGui::BeginDisabled();
+		}
+		if (ImGui::CollapsingHeader("Room")) {
+			ImGui::Text("Room name: ");
+			ImGui::InputText("##roomNameInput", roomName, IM_ARRAYSIZE(roomName));
+			ImGui::Text("Public room? ");
+			ImGui::SameLine();
+			ImGui::Checkbox("##publicRoomCheckbox", &publicRoom);
+			ImGui::NewLine();
+			if (ImGui::Button("Join")) {
+				if (m_Library) {
+					p_JoinRoom(roomName);
+				}
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Create")) {
+				if (m_Library) {
+					p_CreateRoom(roomName, true);
+				}
+			}
+		}
+		if (!*connectedToServer) {
+			ImGui::EndDisabled();
 		}
 		ImGui::End();
 	}

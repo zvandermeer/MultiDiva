@@ -7,6 +7,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"unsafe"
 
@@ -24,13 +25,22 @@ var cfg dataTypes.ConfigData
 var connectedToServer bool
 
 //export MultiDivaInit
-func MultiDivaInit() {
+func MultiDivaInit() *bool {
 	fmt.Println("[MultiDiva] Initializing MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "...")
 	cfg = configManager.LoadConfig()
+	return &connectedToServer
 }
 
+//export LeaveServer
+func LeaveServer() {
+	CloseClient()
+	ReceivingChannel <- "logout"
+}
+
+// TODO for some reason can't login again, always sends 'clientLogout' on first instruction
+
 //export ConnectToServer
-func ConnectToServer(serverAddress *C.char, serverPort *C.char) bool {
+func ConnectToServer(serverAddress *C.char, serverPort *C.char) {
 	connectedToServer = Connect(C.GoString(serverAddress), C.GoString(serverPort))
 	fmt.Println("Past")
 	if connectedToServer {
@@ -38,7 +48,6 @@ func ConnectToServer(serverAddress *C.char, serverPort *C.char) bool {
 		go SendingThread()
 		go ReceivingThread()
 	}
-	return connectedToServer
 }
 
 //export CreateRoom
@@ -113,13 +122,18 @@ func main() {
 	C.free(unsafe.Pointer(myCString))
 	C.free(unsafe.Pointer(myCString2))
 
-	myCString3 := C.CString("TestRoom")
+	myCString3 := C.CString("")
 
-	JoinRoom(myCString3)
+	switch os.Args[1] {
+	case "createRoom":
+		myCString3 = C.CString(os.Args[2])
+		CreateRoom(myCString3, false)
+	case "joinRoom":
+		myCString3 = C.CString(os.Args[2])
+		JoinRoom(myCString3)
+	}
 
 	C.free(unsafe.Pointer(myCString3))
 
-	for {
-
-	}
+	select {}
 }
