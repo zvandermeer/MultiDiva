@@ -41,6 +41,9 @@ func LeaveServer() {
 
 //export ConnectToServer
 func ConnectToServer(serverAddress *C.char, serverPort *C.char) {
+	for len(SendingChannel) > 0 { // Clear out the channel to make sure the "login" instruction is sent
+		<-SendingChannel
+	}
 	connectedToServer = Connect(C.GoString(serverAddress), C.GoString(serverPort))
 	fmt.Println("Past")
 	if connectedToServer {
