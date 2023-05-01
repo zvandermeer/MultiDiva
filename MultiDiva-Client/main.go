@@ -37,8 +37,6 @@ func LeaveServer() {
 	ReceivingChannel <- "logout"
 }
 
-// TODO for some reason can't login again, always sends 'clientLogout' on first instruction
-
 //export ConnectToServer
 func ConnectToServer(serverAddress *C.char, serverPort *C.char) {
 	for len(SendingChannel) > 0 { // Clear out the channel to make sure the "login" instruction is sent
