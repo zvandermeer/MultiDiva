@@ -26,6 +26,11 @@
 #include <d3d11.h>
 #pragma comment(lib, "d3d11.lib")
 
+struct MultiDivaInit_return {
+	bool* connectedToServer;
+	bool* connectedToRoom;
+};
+
 // Globals
 HINSTANCE dll_handle;
 
@@ -96,7 +101,10 @@ bool show_fullscreen_menu = false;
 bool keyPressed = false;
 bool publicRoom = true;
 bool* connectedToServer;
+bool* connectedToRoom;
 float speed = 0.5;
+
+MultiDivaInit_return myInitReturn;
 
 bool init = false;
 HWND window = NULL;
@@ -107,19 +115,23 @@ ID3D11RenderTargetView* mainRenderTargetView = NULL;
 static char serverAddress[128] = "";
 static char serverPort[5] = "9988";
 static char roomName[128] = "";
-static char myEpicString[128] = "Hello from C++!";
+
+static char pushNotification[256] = "";
+static char serverStatus[256] = "";
+static char serverStatusTooltip[256] = "";
+static char roomStatus[256] = "";
+static char serverVersion[5] = "";
 
 
 // Mod Library
 HMODULE m_Library;
 
 // Mod Types
-typedef bool*(__cdecl* _OnInit)();
+typedef MultiDivaInit_return(__cdecl* _OnInit)(char* pushNotification, char* serverStatus, char* serverStatusTooltip, char* roomStatus, char* serverVersion);
 typedef void(__cdecl* _OnDispose)();
 typedef void(__cdecl* _OnSongUpdate)(int songId, bool isPractice);
 typedef void(__cdecl* _MainLoop)();
 typedef void(__cdecl* _OnScoreTrigger)();
-typedef const char* (__cdecl* _StringTest)(std::string roomTitle, bool isPublic);
 typedef void(__cdecl* _ConnectToServer)(const char* serverAddress, const char* serverPort);
 typedef void(__cdecl* _LeaveServer)();
 typedef void(__cdecl* _JoinRoom)(const char* roomName);
@@ -132,7 +144,6 @@ _OnDispose p_OnDispose;
 _OnSongUpdate p_OnSongUpdate;
 _MainLoop p_MainLoop;
 _OnScoreTrigger p_OnScoreTrigger;
-_StringTest p_StringTest;
 _ConnectToServer p_ConnectToServer;
 _LeaveServer p_LeaveServer;
 _JoinRoom p_JoinRoom;
@@ -231,7 +242,6 @@ extern "C" __declspec(dllexport) void Init()
 		p_OnSongUpdate = (_OnSongUpdate)GetProcAddress(m_Library, "SongUpdate");
 		p_MainLoop = (_MainLoop)GetProcAddress(m_Library, "MainLoop");
 		p_OnScoreTrigger = (_OnScoreTrigger)GetProcAddress(m_Library, "OnScoreTrigger");
-		p_StringTest = (_StringTest)GetProcAddress(m_Library, "StringTest");
 		p_ConnectToServer = (_ConnectToServer)GetProcAddress(m_Library, "ConnectToServer");
 		p_LeaveServer = (_LeaveServer)GetProcAddress(m_Library, "LeaveServer");
 		p_JoinRoom = (_JoinRoom)GetProcAddress(m_Library, "JoinRoom");
@@ -243,10 +253,11 @@ extern "C" __declspec(dllexport) void Init()
 		INSTALL_HOOK(_SongPracticeStart);
 		INSTALL_HOOK(_PrintResult);
 
-		strncpy_s(myEpicString, p_StringTest("Hello from C++!", true), sizeof(myEpicString));
-
 		// Mod Entry Point
-		connectedToServer = p_OnInit();
+		myInitReturn = p_OnInit(pushNotification, serverStatus, serverStatusTooltip, roomStatus, serverVersion);
+
+		connectedToServer = myInitReturn.connectedToServer;
+		connectedToRoom = myInitReturn.connectedToRoom;
 	}
 }
 
@@ -320,8 +331,9 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 		ImGui::Begin("Test Fullscreen", &show_fullscreen_menu, flags);
 		ImGui::NewLine();
 		ImGui::Indent();
-		ImGui::Text("Fullscreen menu test!");
-		ImGui::Text(myEpicString);
+		ImGui::Text("MultiDiva v");
+		ImGui::SameLine(0,0);
+		ImGui::Text(serverVersion);
 		if (ImGui::CollapsingHeader("Server")) {
 			ImGui::Text("Server address: ");
 			ImGui::InputText("##serverAddressInput", serverAddress, IM_ARRAYSIZE(serverAddress));
@@ -341,28 +353,47 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 					}
 				}
 			}
+			ImGui::SameLine();
+			ImGui::Text(serverStatus);
+			if (ImGui::IsItemHovered() && strcmp(serverStatusTooltip, "") != 0) {
+				ImGui::SetTooltip(serverStatusTooltip);
+			}
 		}
 		if (!*connectedToServer) {
 			ImGui::BeginDisabled();
 		}
 		if (ImGui::CollapsingHeader("Room")) {
+			if (*connectedToRoom) {
+				ImGui::BeginDisabled();
+			}
 			ImGui::Text("Room name: ");
 			ImGui::InputText("##roomNameInput", roomName, IM_ARRAYSIZE(roomName));
 			ImGui::Text("Public room? ");
 			ImGui::SameLine();
 			ImGui::Checkbox("##publicRoomCheckbox", &publicRoom);
-			ImGui::NewLine();
-			if (ImGui::Button("Join")) {
-				if (m_Library) {
-					p_JoinRoom(roomName);
+			if (*connectedToRoom) {
+				ImGui::EndDisabled();
+			}
+			if (!*connectedToRoom) {
+				if (ImGui::Button("Join")) {
+					if (m_Library) {
+						p_JoinRoom(roomName);
+					}
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Create")) {
+					if (m_Library) {
+						p_CreateRoom(roomName, true);
+					}
+				}
+			}
+			else {
+				if (ImGui::Button("Leave room")) {
+
 				}
 			}
 			ImGui::SameLine();
-			if (ImGui::Button("Create")) {
-				if (m_Library) {
-					p_CreateRoom(roomName, true);
-				}
-			}
+			ImGui::Text(roomStatus);
 		}
 		if (!*connectedToServer) {
 			ImGui::EndDisabled();

@@ -2,17 +2,16 @@ package main
 
 /*
 #include <stdlib.h>
+#include <string.h>
 */
 import "C"
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"strconv"
-	"unsafe"
-
 	"github.com/ovandermeer/MultiDiva/internal/configManager"
 	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
+	"os"
+	"strconv"
 )
 
 const (
@@ -23,27 +22,44 @@ const (
 var cfg dataTypes.ConfigData
 
 var connectedToServer bool
+var connectedToRoom bool
+var pushNotification *C.char
+var serverStatus *C.char
+var serverStatusTooltip *C.char
+var roomStatus *C.char
 
 //export MultiDivaInit
-func MultiDivaInit() *bool {
+func MultiDivaInit(_pushNotification *C.char, _serverStatus *C.char, _serverStatusTooltip *C.char, _roomStatus *C.char, serverVersion *C.char) (*bool, *bool) {
+	C.strncpy((*C.char)(serverVersion), (*C.char)(C.CString(strconv.Itoa(MajorClientVersion)+"."+strconv.Itoa(MinorClientVersion))), 5)
+	pushNotification = _pushNotification
+	serverStatus = _serverStatus
+	serverStatusTooltip = _serverStatusTooltip
+	roomStatus = _roomStatus
 	fmt.Println("[MultiDiva] Initializing MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "...")
 	cfg = configManager.LoadConfig()
-	return &connectedToServer
+	return &connectedToServer, &connectedToRoom
 }
 
 //export LeaveServer
 func LeaveServer() {
 	CloseClient()
 	ReceivingChannel <- "logout"
+	C.strncpy((*C.char)(serverStatus), (*C.char)(C.CString("Disconnected from server successfully!")), 256)
+	C.strncpy((*C.char)(serverStatusTooltip), (*C.char)(C.CString("")), 256)
 }
 
 //export ConnectToServer
 func ConnectToServer(serverAddress *C.char, serverPort *C.char) {
-	for len(SendingChannel) > 0 { // Clear out the channel to make sure the "login" instruction is sent
+	// Clear out both channels before new connection
+	for len(SendingChannel) > 0 {
 		<-SendingChannel
 	}
+	for len(ReceivingChannel) > 0 {
+		<-ReceivingChannel
+	}
+
 	connectedToServer = Connect(C.GoString(serverAddress), C.GoString(serverPort))
-	fmt.Println("Past")
+
 	if connectedToServer {
 		fmt.Println("Connected!")
 		go SendingThread()
@@ -94,6 +110,7 @@ func SongUpdate(songID C.int, isPractice bool) {
 //export MultiDivaDispose
 func MultiDivaDispose() {
 	CloseClient()
+	ReceivingChannel <- "logout"
 }
 
 //export OnScoreTrigger
@@ -101,40 +118,18 @@ func OnScoreTrigger() {
 	go GetFinalScore()
 }
 
-//export StringTest
-func StringTest(ctitle *C.char, test bool) *C.char {
-	// ctitle := C.CString(title)
-	fmt.Println(C.GoString(ctitle))
-	fmt.Println(strconv.FormatBool(test))
-	// defer C.free(unsafe.Pointer(ctitle))
-
-	return C.CString("Hello from go!")
-}
-
 // use for debugging without diva running
 func main() {
-	MultiDivaInit()
+	MultiDivaInit(C.CString(""), C.CString(""), C.CString(""), C.CString(""), C.CString(""))
 
-	myCString := C.CString("localhost")
-	myCString2 := C.CString("9988")
-
-	ConnectToServer(myCString, myCString2)
-
-	C.free(unsafe.Pointer(myCString))
-	C.free(unsafe.Pointer(myCString2))
-
-	myCString3 := C.CString("")
+	ConnectToServer(C.CString("localhost"), C.CString("9988"))
 
 	switch os.Args[1] {
 	case "createRoom":
-		myCString3 = C.CString(os.Args[2])
-		CreateRoom(myCString3, false)
+		CreateRoom(C.CString(os.Args[2]), false)
 	case "joinRoom":
-		myCString3 = C.CString(os.Args[2])
-		JoinRoom(myCString3)
+		JoinRoom(C.CString(os.Args[2]))
 	}
-
-	C.free(unsafe.Pointer(myCString3))
 
 	select {}
 }
