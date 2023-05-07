@@ -48,6 +48,9 @@
     <ClInclude Include="ImGui\imconfig.h">
       <Filter>Header Files\ImGui</Filter>
     </ClInclude>
+    <ClInclude Include="deps\stb_image.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
