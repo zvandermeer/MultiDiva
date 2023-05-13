@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"unsafe"
-
-	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 )
 
 const (
@@ -33,6 +31,18 @@ func GetFrameScore() {
 	score = score - 4294967296
 
 	if score != oldScore {
+		UINoteData[0].fullScore = C.int(score)
+
+		scoreSlice := splitInt(score)
+
+		for i := 0; i < 7; i++ {
+			if i < len(scoreSlice) {
+				UINoteData[0].slicedScore[6-i] = C.int(scoreSlice[i])
+			} else {
+				UINoteData[0].slicedScore[6-i] = 0
+			}
+		}
+
 		scoreChange := score - oldScore
 
 		//fmt.Println("RAW SCORE CHANGE: " + strconv.Itoa(scoreChange))
@@ -48,7 +58,7 @@ func GetFrameScore() {
 
 		updateScore := false
 
-		var noteGrade dataTypes.NoteGrade
+		var noteGrade NoteGrade
 
 		switch scoreChange {
 		// Add to account for possible health bonus, or combo being added at the same time. single combo adds 10, double 20, so on. Multi notes are also
@@ -56,29 +66,29 @@ func GetFrameScore() {
 		// at cool is worth 1500, etc.
 		case 500, 510, 520, 530, 540, 550, 1000, 1010, 1020, 1030, 1040, 1050, 1500, 1510, 1520, 1530, 1540, 1550, 2000, 2010, 2020, 2030, 2040, 2050:
 			if lastCombo < combo {
-				noteGrade = dataTypes.Cool
+				noteGrade = Cool
 				updateScore = true
 			}
 		case 300, 310, 320, 330, 340, 350, 600, 610, 620, 630, 640, 650, 900, 910, 920, 930, 940, 950, 1200, 1210, 1220, 1230, 1240, 1250:
 			if lastCombo < combo {
-				noteGrade = dataTypes.Good
+				noteGrade = Good
 				updateScore = true
 			}
 		case 100, 110, 120, 130, 140, 200, 210, 220, 230, 240, 400, 410, 420, 430, 440:
 			if combo == 0 {
-				noteGrade = dataTypes.Safe
+				noteGrade = Safe
 				updateScore = true
 			}
 		// Everything below this point causes you to lose health, so a health bonus isn't possible. Also skipped over some values that conflict
 		// with other scores. Opted to go for the score that's more likely to happen
 		case 250, 260, 270, 280, 290, 750, 760, 770, 780, 790:
 			if combo == 0 {
-				noteGrade = dataTypes.Cool_Wrong
+				noteGrade = Cool_Wrong
 				updateScore = true
 			}
 		case 150, 160, 170, 180, 190, 450, 460, 470, 480, 490:
 			if combo == 0 {
-				noteGrade = dataTypes.Good_Wrong
+				noteGrade = Good_Wrong
 				updateScore = true
 			}
 		}
@@ -105,7 +115,7 @@ func GetFrameScore() {
 }
 
 func GetFinalScore() {
-	myScore := *((*dataTypes.DivaScore)(unsafe.Pointer(MainScoreAddress)))
+	myScore := *((*DivaScore)(unsafe.Pointer(MainScoreAddress)))
 	worstCount := *((*uint32)(unsafe.Pointer(WorstCounterAddress)))
 	completePercent := *((*float32)(unsafe.Pointer(CompletionAddress)))
 	PVId := *((*uint32)(unsafe.Pointer(PVIdAddress)))
@@ -155,4 +165,14 @@ func GetFinalScore() {
 		"Grade":       strconv.FormatUint(uint64(PVGrade), 10)})
 
 	SendingChannel <- myData
+}
+
+// split integer into slice of single digits
+func splitInt(n int) []int {
+	var slc []int
+	for n > 0 {
+		slc = append(slc, n%10)
+		n = n / 10
+	}
+	return slc
 }

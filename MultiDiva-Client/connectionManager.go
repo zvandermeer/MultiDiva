@@ -11,13 +11,11 @@ import (
 	"net"
 	"strconv"
 	"strings"
-
-	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 )
 
 var Connection net.Conn
 var SendingChannel = make(chan []byte, 100)
-var SendingMutex = dataTypes.MessageData{}
+var SendingMutex = MessageData{}
 var ReceivingChannel = make(chan string, 100)
 
 func ReceivingThread() {
@@ -41,9 +39,9 @@ receivingLoop:
 			fmt.Println("[MultiDiva] Error receiving score from " + cfg.ServerAddress + ":" + cfg.Port + ".")
 			if strings.Contains(err.Error(), "An existing connection was forcibly closed by the remote host") || strings.Contains(err.Error(), "EOF") {
 				fmt.Println("[MultiDiva] Unexpected server closure.")
-				C.strncpy((*C.char)(serverStatus), (*C.char)(C.CString("Unexpected server closure")), 256)
-				C.strncpy((*C.char)(serverStatusTooltip), (*C.char)(C.CString("")), 256)
-				C.strncpy((*C.char)(pushNotification), (*C.char)(C.CString("[NOTICE] Server connection closed unexpectedly!")), 256)
+				setUIString(serverStatus, "Unexpected server closure", 256)
+				setUIString(serverStatusTooltip, "", 256)
+				setUIString(pushNotification, "[NOTICE] Server connection closed unexpectedly!", 256)
 				CloseClient()
 				break receivingLoop
 			}
@@ -85,35 +83,36 @@ receivingLoop:
 
 			switch instruction {
 			case "serverClosing":
-				C.strncpy((*C.char)(serverStatus), (*C.char)(C.CString("Server was shut down.")), 256)
-				C.strncpy((*C.char)(serverStatusTooltip), (*C.char)(C.CString("")), 256)
-				C.strncpy((*C.char)(pushNotification), (*C.char)(C.CString("[NOTICE] Server is being shut down!")), 256)
+				setUIString(serverStatus, "Server was shut down.", 265)
+				setUIString(serverStatusTooltip, "", 256)
+				setUIString(pushNotification, "[NOTICE] Server is being shut down!", 256)
 				CloseClient()
 				break receivingLoop
 			case "loginSuccess":
-				C.strncpy((*C.char)(serverStatus), (*C.char)(C.CString("Connected to server successfully!")), 256)
-				C.strncpy((*C.char)(serverStatusTooltip), (*C.char)(C.CString("")), 256)
+				//setUIString(serverStatus, "Connected to server successfully!", 256)
+				setUIString(serverStatusTooltip, "", 256)
+				setUIString(serverStatus, "Connected to server successfully!", 256)
 			case "invalidLogin":
-				C.strncpy((*C.char)(serverStatus), (*C.char)(C.CString("An unknown login error occurred. Please try to login again.")), 256)
-				C.strncpy((*C.char)(serverStatusTooltip), (*C.char)(C.CString("")), 256)
+				setUIString(serverStatus, "An unknown login error occurred. Please try to login again.", 256)
+				setUIString(serverStatusTooltip, "", 256)
 				fmt.Println("Unknown login error")
 			case "versionMismatch":
 				MajorServerVersion, _ := strconv.Atoi(dat["MajorServerVersion"].(string))
 				MinorServerVersion, _ := strconv.Atoi(dat["MinorServerVersion"].(string))
 				if MajorServerVersion > MajorClientVersion {
-					C.strncpy((*C.char)(serverStatus), (*C.char)(C.CString("Outdated client. (Hover for more details)")), 256)
+					setUIString(serverStatus, "Outdated client. (Hover for more details)", 256)
 					myTooltip := "Server version: v" + strconv.Itoa(MajorServerVersion) + "." + strconv.Itoa(MinorServerVersion) + "\n"
 					myTooltip += "Client version: v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "\n"
 					myTooltip += "Please update client to a compatible version! (v" + strconv.Itoa(MajorServerVersion) + ".x)"
-					C.strncpy((*C.char)(serverStatusTooltip), (*C.char)(C.CString(myTooltip)), 256)
+					setUIString(serverStatusTooltip, myTooltip, 256)
 					fmt.Println("Please update client")
 					connectedToServer = false
 				} else {
-					C.strncpy((*C.char)(serverStatus), (*C.char)(C.CString("Outdated server. (Hover for more details)")), 256)
+					setUIString(serverStatus, "Outdated server. (Hover for more details)", 256)
 					myTooltip := "Server version: v" + strconv.Itoa(MajorServerVersion) + "." + strconv.Itoa(MinorServerVersion) + "\n"
 					myTooltip += "Client version: v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "\n"
 					myTooltip += "Please downgrade client to a compatible version, (v" + strconv.Itoa(MajorServerVersion) + ".x) or contact the server admin to update the server!"
-					C.strncpy((*C.char)(serverStatusTooltip), (*C.char)(C.CString(myTooltip)), 256)
+					setUIString(serverStatusTooltip, myTooltip, 256)
 					fmt.Println("Please update server")
 					connectedToServer = false
 				}
@@ -124,21 +123,21 @@ receivingLoop:
 				roomName := dat["RoomName"].(string)
 				switch dat["Status"].(string) {
 				case "roomNotFound":
-					C.strncpy((*C.char)(roomStatus), (*C.char)(C.CString("Room with name \""+roomName+"\" not found!")), 256)
+					setUIString(roomStatus, "Room with name \""+roomName+"\" not found!", 256)
 				case "roomAlreadyExists":
-					C.strncpy((*C.char)(roomStatus), (*C.char)(C.CString("Cannot create room, room with name \""+roomName+"\" already exists!")), 256)
+					setUIString(roomStatus, "Cannot create room, room with name \""+roomName+"\" already exists!", 256)
 				case "connectedToRoom":
 					connectedToRoom = true
-					C.strncpy((*C.char)(roomStatus), (*C.char)(C.CString("Connected to room"+roomName+" successfully!")), 256)
+					setUIString(roomStatus, "Connected to room"+roomName+" successfully!", 256)
 				case "connectedAsLeader":
 					connectedToRoom = true
-					C.strncpy((*C.char)(roomStatus), (*C.char)(C.CString("Connected to room successfully! You are now the leader of room \""+roomName+"\"")), 256)
+					setUIString(roomStatus, "Connected to room successfully! You are now the leader of room \""+roomName+"\"", 256)
 				case "disconnectedFromRoom":
 					connectedToRoom = false
-					C.strncpy((*C.char)(roomStatus), (*C.char)(C.CString("Disconnected from room \""+roomName+"\"!")), 256)
+					setUIString(roomStatus, "Disconnected from room \""+roomName+"\"!", 256)
 				case "kickedFromRoom":
 					connectedToRoom = false
-					C.strncpy((*C.char)(pushNotification), (*C.char)(C.CString("You've been kicked from the room!")), 256)
+					setUIString(pushNotification, "You've been kicked from the room!", 256)
 				}
 			default:
 				// SendingMutex.Store(serverMessage)

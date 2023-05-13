@@ -30,12 +30,31 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "deps/stb_image.h"
 
+enum NoteGrade {
+	Cool = 0,
+	Good = 1,
+	Safe = 2,
+	Cool_Wrong = 3,
+	Good_Wrong = 4
+};
 
+struct NoteData {
+	int32_t fullScore;
+	int32_t slicedScore[7];
+	int32_t combo;
+	NoteGrade grade;
+};
 
 struct MultiDivaInit_return {
 	bool* connectedToServer;
 	bool* connectedToRoom;
 	int* score;
+};
+
+struct Image {
+	ID3D11ShaderResourceView* texture;
+	int width;
+	int height;
 };
 
 // Globals
@@ -130,11 +149,13 @@ static char serverStatusTooltip[256] = "";
 static char roomStatus[256] = "";
 static char serverVersion[5] = "";
 
+NoteData playerScoresForUI[10];
+
 // Mod Library
 HMODULE m_Library;
 
 // Mod Types
-typedef MultiDivaInit_return(__cdecl* _OnInit)(char* pushNotification, char* serverStatus, char* serverStatusTooltip, char* roomStatus, char* serverVersion);
+typedef MultiDivaInit_return(__cdecl* _OnInit)(char* pushNotification, char* serverStatus, char* serverStatusTooltip, char* roomStatus, char* serverVersion, NoteData[]);
 typedef void(__cdecl* _OnDispose)();
 typedef void(__cdecl* _OnSongUpdate)(int songId, bool isPractice);
 typedef void(__cdecl* _MainLoop)();
@@ -259,8 +280,31 @@ extern "C" __declspec(dllexport) void Init()
 		INSTALL_HOOK(_SongPracticeStart);
 		INSTALL_HOOK(_PrintResult);
 
+		NoteData myGamer;
+		myGamer.combo = 12;
+		myGamer.fullScore = 7258571;
+		myGamer.grade = Good;
+		myGamer.slicedScore[0] = 7;
+		myGamer.slicedScore[1] = 2;
+		myGamer.slicedScore[2] = 5;
+		myGamer.slicedScore[3] = 8;
+		myGamer.slicedScore[4] = 5;
+		myGamer.slicedScore[5] = 7;
+		myGamer.slicedScore[6] = 1;
+
+		NoteData myGamer2;
+		myGamer2.combo = 42;
+		myGamer2.fullScore = 370;
+		myGamer2.grade = Safe;
+		myGamer2.slicedScore[0] = 3;
+		myGamer2.slicedScore[1] = 7;
+		myGamer2.slicedScore[2] = 0;
+
+		playerScoresForUI[0] = myGamer;
+		playerScoresForUI[1] = myGamer2;
+
 		// Mod Entry Point
-		myInitReturn = p_OnInit(pushNotification, serverStatus, serverStatusTooltip, roomStatus, serverVersion);
+		myInitReturn = p_OnInit(pushNotification, serverStatus, serverStatusTooltip, roomStatus, serverVersion, playerScoresForUI);
 
 		connectedToServer = myInitReturn.connectedToServer;
 		connectedToRoom = myInitReturn.connectedToRoom;
@@ -322,8 +366,8 @@ bool LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_sr
 
 int my_image_width = 0;
 int my_image_height = 0;
-ID3D11ShaderResourceView* coolTexture = NULL;
-ID3D11ShaderResourceView* myNumbers[10];
+Image coolTexture;
+Image myNumbers[10];
 
 static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_interval, UINT flags) {
 	if (!init) {
@@ -353,12 +397,12 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 			ImGui_ImplDX11_Init(p_device, p_context);
 			init = true;
 
-			bool epicBool = LoadTextureFromFile("mods\\MultiDiva\\img\\cool.png", &coolTexture, &my_image_width, &my_image_height);
+			bool epicBool = LoadTextureFromFile("mods\\MultiDiva\\img\\cool.png", &coolTexture.texture, &coolTexture.width, &coolTexture.height);
 			IM_ASSERT(epicBool);
 
 			for (int i = 0; i < 10; i++) {
 				std::string s = "mods\\MultiDiva\\img\\num\\" + std::to_string(i) + ".png";
-				bool newEpicBool = LoadTextureFromFile(s.c_str(), &myNumbers[i], &my_image_width, &my_image_height);
+				bool newEpicBool = LoadTextureFromFile(s.c_str(), &myNumbers[i].texture, &myNumbers[i].width, &myNumbers[i].height);
 				IM_ASSERT(newEpicBool);
 			}
 		}
@@ -471,9 +515,9 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 		if (ImGui::CollapsingHeader("Funny Pictures")) {
 			ImGui::Text("pointer = %p", coolTexture);
 			ImGui::Text("size = %d x %d", my_image_width, my_image_height);
-			ImGui::Image((void*)coolTexture, ImVec2(my_image_width, my_image_height));
+			ImGui::Image((void*)coolTexture.texture, ImVec2(coolTexture.width, coolTexture.height));
 			for (int i = 0; i < 10; i++) {
-				ImGui::Image((void*)myNumbers[i], ImVec2(32, 32));
+				ImGui::Image((void*)myNumbers[i].texture, ImVec2(32, 32));
 				ImGui::SameLine();
 			}
 			ImGui::Text("Show in game gui?");
@@ -485,12 +529,22 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 	if (show_ingame_gui) {
 		static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
-		ImGui::SetNextWindowSize(ImVec2(viewport->Size.x/6.4, viewport->Size.y/9));
-		ImGui::SetNextWindowPos(ImVec2(viewport->Size.x - (viewport->Size.x/5.5), viewport->Pos.y + (viewport->Size.y / 14.4)));
+		ImGui::SetNextWindowSize(ImVec2(viewport->Size.x / 6.4, viewport->Size.y / 12));
+		ImGui::SetNextWindowPos(ImVec2(viewport->Size.x - (viewport->Size.x / 5.5), viewport->Pos.y + (viewport->Size.y / 14.4)));
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 0.20f));
 		ImGui::Begin("In game GUI", &show_ingame_gui, flags);
 		ImGui::Text("UsernameHere");
-		ImGui::Image((void*)coolTexture, ImVec2(my_image_width, my_image_height));
+
+		for (int i = 0; i < 7; i++) {
+			ImGui::Image((void*)myNumbers[playerScoresForUI[0].slicedScore[i]].texture, ImVec2(viewport->Size.x / 64, viewport->Size.x / 64));
+			if (viewport->Size.x == 1280) {
+				ImGui::SameLine(0, 0.1);
+			}
+			else {
+				ImGui::SameLine(0, 0);
+			}
+			
+		}
 		
 		ImGui::Text("0000000");
 		ImGui::End();

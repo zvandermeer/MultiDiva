@@ -3,15 +3,29 @@ package main
 /*
 #include <stdlib.h>
 #include <string.h>
+
+enum NoteGrade {
+	Cool = 0,
+	Good = 1,
+	Safe = 2,
+	Cool_Wrong = 3,
+	Good_Wrong = 4
+};
+
+struct NoteData {
+	int fullScore;
+	int slicedScore[7];
+	int combo;
+	enum NoteGrade grade;
+};
 */
 import "C"
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ovandermeer/MultiDiva/internal/configManager"
-	"github.com/ovandermeer/MultiDiva/internal/dataTypes"
 	"os"
 	"strconv"
+	"unsafe"
 )
 
 const (
@@ -19,7 +33,7 @@ const (
 	MinorClientVersion = 1
 )
 
-var cfg dataTypes.ConfigData
+var cfg ConfigData
 
 var connectedToServer bool
 var connectedToRoom bool
@@ -27,16 +41,30 @@ var pushNotification *C.char
 var serverStatus *C.char
 var serverStatusTooltip *C.char
 var roomStatus *C.char
+var serverVersion *C.char
+
+type NoteDataC C.struct_NoteData
+
+var UINoteData []NoteDataC
 
 //export MultiDivaInit
-func MultiDivaInit(_pushNotification *C.char, _serverStatus *C.char, _serverStatusTooltip *C.char, _roomStatus *C.char, serverVersion *C.char) (*bool, *bool) {
-	C.strncpy((*C.char)(serverVersion), (*C.char)(C.CString(strconv.Itoa(MajorClientVersion)+"."+strconv.Itoa(MinorClientVersion))), 5)
+func MultiDivaInit(_pushNotification *C.char, _serverStatus *C.char, _serverStatusTooltip *C.char, _roomStatus *C.char, _serverVersion *C.char, playerScoresForUI *NoteDataC) (*bool, *bool) {
+	fmt.Println("[MultiDiva] Initializing MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "...")
+
 	pushNotification = _pushNotification
 	serverStatus = _serverStatus
 	serverStatusTooltip = _serverStatusTooltip
 	roomStatus = _roomStatus
-	fmt.Println("[MultiDiva] Initializing MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "...")
-	cfg = configManager.LoadConfig()
+	serverVersion = _serverVersion
+
+	versionString := strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion)
+
+	setUIString(serverVersion, versionString, 5)
+
+	UINoteData = unsafe.Slice(playerScoresForUI, 10)
+	UINoteData[2].combo = 4
+
+	cfg = LoadConfig()
 	return &connectedToServer, &connectedToRoom
 }
 
@@ -44,8 +72,8 @@ func MultiDivaInit(_pushNotification *C.char, _serverStatus *C.char, _serverStat
 func LeaveServer() {
 	CloseClient()
 	ReceivingChannel <- "logout"
-	C.strncpy((*C.char)(serverStatus), (*C.char)(C.CString("Disconnected from server successfully!")), 256)
-	C.strncpy((*C.char)(serverStatusTooltip), (*C.char)(C.CString("")), 256)
+	setUIString(serverStatus, "Disconnected from server successfully!", 256)
+	setUIString(serverStatusTooltip, "", 256)
 }
 
 //export ConnectToServer
@@ -120,7 +148,8 @@ func OnScoreTrigger() {
 
 // use for debugging without diva running
 func main() {
-	MultiDivaInit(C.CString(""), C.CString(""), C.CString(""), C.CString(""), C.CString(""))
+	//var myData []NoteData
+	//MultiDivaInit(C.CString(""), C.CString(""), C.CString(""), C.CString(""), C.CString(""), myData)
 
 	ConnectToServer(C.CString("localhost"), C.CString("9988"))
 

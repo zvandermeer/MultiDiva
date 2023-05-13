@@ -1,4 +1,4 @@
-package dataTypes
+package main
 
 import (
 	"sync"
@@ -23,35 +23,6 @@ func NewConfigData() (config ConfigData) {
 	config.Username = "User"
 	return
 }
-
-// type Handshake struct {
-// 	Instruction        string
-// 	MajorClientVersion string
-// 	MinorClientVersion string
-// 	Username           string
-// }
-
-// type Note struct {
-// 	Instruction string
-// 	Score       int
-// 	Combo       int
-// 	Grade       NoteGrade
-// }
-
-// type FinalScore struct {
-// 	Instruction string
-// 	TotalScore  uint32
-// 	Combo       uint32
-// 	Cool        uint32
-// 	Fine        uint32
-// 	Safe        uint32
-// 	Sad         uint32
-// 	Worst       uint32
-// 	Completion  float32
-// 	PV          uint32
-// 	Difficulty  int64
-// 	Grade       int64
-// }
 
 type DivaScore struct {
 	TotalScore     uint32
@@ -85,7 +56,6 @@ const (
 	Safe
 	Cool_Wrong
 	Good_Wrong
-	Bad
 )
 
 type MessageData struct {
@@ -127,3 +97,10 @@ const (
 	Extreme
 	ExExtreme
 )
+
+type NoteData struct {
+	FullScore   int32
+	SlicedScore []int32
+	Combo       int32
+	Grade       NoteGrade
+}
