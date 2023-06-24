@@ -39,6 +39,7 @@ enum NoteGrade {
 };
 
 struct NoteData {
+	bool connectedPlayer;
 	int32_t fullScore;
 	int32_t slicedScore[7];
 	int32_t combo;
@@ -369,6 +370,10 @@ int my_image_height = 0;
 Image coolTexture;
 Image myNumbers[10];
 
+ImFont* exoFontLarge;
+ImFont* exoFontSmall;
+ImFont* defaultFont;
+
 static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_interval, UINT flags) {
 	if (!init) {
 		if (SUCCEEDED(p_swap_chain->GetDevice(__uuidof(ID3D11Device), (void**)&p_device)))
@@ -397,11 +402,15 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 			ImGui_ImplDX11_Init(p_device, p_context);
 			init = true;
 
-			bool epicBool = LoadTextureFromFile("mods\\MultiDiva\\img\\cool.png", &coolTexture.texture, &coolTexture.width, &coolTexture.height);
+			exoFontLarge = io.Fonts->AddFontFromFileTTF("mods\\MultiDiva\\assets\\font\\Exo2-Regular.ttf", 20);
+			exoFontSmall = io.Fonts->AddFontFromFileTTF("mods\\MultiDiva\\assets\\font\\Exo2-Regular.ttf", 16);
+			defaultFont = io.Fonts->AddFontDefault();
+
+			bool epicBool = LoadTextureFromFile("mods\\MultiDiva\\assets\\img\\cool.png", &coolTexture.texture, &coolTexture.width, &coolTexture.height);
 			IM_ASSERT(epicBool);
 
 			for (int i = 0; i < 10; i++) {
-				std::string s = "mods\\MultiDiva\\img\\num\\" + std::to_string(i) + ".png";
+				std::string s = "mods\\MultiDiva\\assets\\img\\num\\" + std::to_string(i) + ".png";
 				bool newEpicBool = LoadTextureFromFile(s.c_str(), &myNumbers[i].texture, &myNumbers[i].width, &myNumbers[i].height);
 				IM_ASSERT(newEpicBool);
 			}
@@ -409,10 +418,13 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 		else
 			return p_present(p_swap_chain, sync_interval, flags);
 	}
+
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 
 	ImGui::NewFrame();
+
+	ImGui::PushFont(defaultFont);
 
 	ImGui::ShowDemoWindow(); // check demo cpp
 
@@ -522,32 +534,43 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 			}
 			ImGui::Text("Show in game gui?");
 			ImGui::Checkbox("##inGameGUI", &show_ingame_gui);
+			ImGui::Checkbox("Canvas", &show_canvas);
 		}
 		ImGui::End();
 	}
 
 	if (show_ingame_gui) {
-		static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
-		const ImGuiViewport* viewport = ImGui::GetMainViewport();
-		ImGui::SetNextWindowSize(ImVec2(viewport->Size.x / 6.4, viewport->Size.y / 12));
-		ImGui::SetNextWindowPos(ImVec2(viewport->Size.x - (viewport->Size.x / 5.5), viewport->Pos.y + (viewport->Size.y / 14.4)));
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 0.20f));
-		ImGui::Begin("In game GUI", &show_ingame_gui, flags);
-		ImGui::Text("UsernameHere");
+		for (int i = 0; i < 10; i++) {
+			if (playerScoresForUI[i].connectedPlayer == true) {
+				static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+				const ImGuiViewport* viewport = ImGui::GetMainViewport();
 
-		for (int i = 0; i < 7; i++) {
-			ImGui::Image((void*)myNumbers[playerScoresForUI[0].slicedScore[i]].texture, ImVec2(viewport->Size.x / 64, viewport->Size.x / 64));
-			if (viewport->Size.x == 1280) {
-				ImGui::SameLine(0, 0.1);
+				float offset = (viewport->Size.y / 12) + (viewport->Size.y / 48);
+
+				ImGui::SetNextWindowSize(ImVec2(viewport->Size.x / 6.4, viewport->Size.y / 12));
+				ImGui::SetNextWindowPos(ImVec2(viewport->Size.x - (viewport->Size.x / 5.5), viewport->Pos.y + (viewport->Size.y / 14.4) + (offset * i)));
+				ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 0.20f));
+				char integer_string[32];
+				sprintf_s(integer_string, "%d", i);
+				char other_string[64] = "In game GUI";
+				strcat_s(other_string, integer_string);
+				ImGui::Begin(other_string, &show_ingame_gui, flags);
+				ImGui::PushFont(exoFontLarge);
+				ImGui::Text("UsernameHere");
+				ImGui::PopFont;
+
+				for (int j = 0; j < 7; j++) {
+					ImGui::Image((void*)myNumbers[playerScoresForUI[i].slicedScore[j]].texture, ImVec2(viewport->Size.x / 64, viewport->Size.x / 64));
+					if (viewport->Size.x == 1280) {
+						ImGui::SameLine(0, 0.1);
+					}
+					else {
+						ImGui::SameLine(0, 0);
+					}
+				}
+				ImGui::End();
 			}
-			else {
-				ImGui::SameLine(0, 0);
-			}
-			
 		}
-		
-		ImGui::Text("0000000");
-		ImGui::End();
 	}
 
 	if (show_canvas) {

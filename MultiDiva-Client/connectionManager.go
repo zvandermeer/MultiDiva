@@ -117,8 +117,30 @@ receivingLoop:
 					connectedToServer = false
 				}
 			case "note":
-				fmt.Println("NOTED")
-				fmt.Println(dat)
+				score, _ := strconv.Atoi(dat["Score"].(string))
+				combo, _ := strconv.Atoi(dat["Combo"].(string))
+				ranking := int(dat["ranking"].(float64))
+
+				UINoteData[ranking].connectedPlayer = true
+
+				UINoteData[ranking].fullScore = C.int(score)
+				UINoteData[ranking].combo = C.int(combo)
+
+				scoreSlice := splitInt(score)
+
+				for i := 0; i < 7; i++ {
+					if i < len(scoreSlice) {
+						UINoteData[ranking].slicedScore[6-i] = C.int(scoreSlice[i])
+					} else {
+						UINoteData[ranking].slicedScore[6-i] = 0
+					}
+				}
+
+				gradeInt, _ := strconv.Atoi(dat["Grade"].(string))
+
+				UINoteData[ranking].grade = uint32(gradeInt)
+
+				fmt.Println(UINoteData)
 			case "roomConnectionUpdate":
 				roomName := dat["RoomName"].(string)
 				switch dat["Status"].(string) {
@@ -128,7 +150,7 @@ receivingLoop:
 					setUIString(roomStatus, "Cannot create room, room with name \""+roomName+"\" already exists!", 256)
 				case "connectedToRoom":
 					connectedToRoom = true
-					setUIString(roomStatus, "Connected to room"+roomName+" successfully!", 256)
+					setUIString(roomStatus, "Connected to room "+roomName+" successfully!", 256)
 				case "connectedAsLeader":
 					connectedToRoom = true
 					setUIString(roomStatus, "Connected to room successfully! You are now the leader of room \""+roomName+"\"", 256)

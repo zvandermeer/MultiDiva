@@ -3,6 +3,7 @@ package main
 /*
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 enum NoteGrade {
 	Cool = 0,
@@ -13,6 +14,7 @@ enum NoteGrade {
 };
 
 struct NoteData {
+	bool connectedPlayer;
 	int fullScore;
 	int slicedScore[7];
 	int combo;
@@ -62,7 +64,7 @@ func MultiDivaInit(_pushNotification *C.char, _serverStatus *C.char, _serverStat
 	setUIString(serverVersion, versionString, 5)
 
 	UINoteData = unsafe.Slice(playerScoresForUI, 10)
-	UINoteData[2].combo = 4
+	UINoteData[0].connectedPlayer = true
 
 	cfg = LoadConfig()
 	return &connectedToServer, &connectedToRoom

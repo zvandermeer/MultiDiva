@@ -32,6 +32,7 @@ func GetFrameScore() {
 
 	if score != oldScore {
 		UINoteData[0].fullScore = C.int(score)
+		UINoteData[0].combo = C.int(combo)
 
 		scoreSlice := splitInt(score)
 
