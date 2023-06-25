@@ -31,22 +31,8 @@ func GetFrameScore() {
 	score = score - 4294967296
 
 	if score != oldScore {
-		UINoteData[0].fullScore = C.int(score)
-		UINoteData[0].combo = C.int(combo)
-
-		scoreSlice := splitInt(score)
-
-		for i := 0; i < 7; i++ {
-			if i < len(scoreSlice) {
-				UINoteData[0].slicedScore[6-i] = C.int(scoreSlice[i])
-			} else {
-				UINoteData[0].slicedScore[6-i] = 0
-			}
-		}
 
 		scoreChange := score - oldScore
-
-		//fmt.Println("RAW SCORE CHANGE: " + strconv.Itoa(scoreChange))
 
 		// For every 10 combo, you get a 50 point bonus, so subtract that. Bonus also maxes out at 50 combo
 		if combo >= 50 {

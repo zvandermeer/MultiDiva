@@ -119,7 +119,7 @@ receivingLoop:
 			case "note":
 				score, _ := strconv.Atoi(dat["Score"].(string))
 				combo, _ := strconv.Atoi(dat["Combo"].(string))
-				ranking := int(dat["ranking"].(float64))
+				ranking, _ := strconv.Atoi(dat["ranking"].(string))
 
 				UINoteData[ranking].connectedPlayer = true
 
