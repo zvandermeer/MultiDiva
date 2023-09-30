@@ -126,7 +126,10 @@ bool show_my_menu = true;
 bool show_canvas = false;
 bool show_ingame_gui = false;
 bool show_fullscreen_menu = false;
-bool keyPressed = false;
+bool show_endgame_menu = false;
+bool f10Pressed = false;
+bool f9Pressed = false;
+bool f8Pressed = false;
 bool publicRoom = true;
 bool* connectedToServer;
 bool* connectedToRoom;
@@ -218,6 +221,8 @@ HOOK(void, __fastcall, _SongStart, sigSongStart, int songId)
 	{
 		// Playing
 		p_OnSongUpdate(songId, false);
+
+		show_ingame_gui = true;
 	}
 
 	original_SongStart(songId);
@@ -249,6 +254,8 @@ HOOK(int, __fastcall, _PrintResult, DivaScoreTrigger, int a1) {
 
 	if (m_Library) {
 		p_OnScoreTrigger();
+
+		show_ingame_gui = false;
 	}
 
 	return original_PrintResult(a1);
@@ -368,9 +375,12 @@ bool LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_sr
 int my_image_width = 0;
 int my_image_height = 0;
 Image coolTexture;
+
 Image myNumbers[10];
 
+ImFont* exoFontXL;
 ImFont* exoFontLarge;
+ImFont* exoFontMedium;
 ImFont* exoFontSmall;
 ImFont* defaultFont;
 
@@ -402,7 +412,9 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 			ImGui_ImplDX11_Init(p_device, p_context);
 			init = true;
 
-			exoFontLarge = io.Fonts->AddFontFromFileTTF("mods\\MultiDiva\\assets\\font\\Exo2-Regular.ttf", 20);
+			exoFontXL = io.Fonts->AddFontFromFileTTF("mods\\MultiDiva\\assets\\font\\Exo2-Regular.ttf", 40);
+			exoFontLarge = io.Fonts->AddFontFromFileTTF("mods\\MultiDiva\\assets\\font\\Exo2-Regular.ttf", 30);
+			exoFontMedium = io.Fonts->AddFontFromFileTTF("mods\\MultiDiva\\assets\\font\\Exo2-Regular.ttf", 20);
 			exoFontSmall = io.Fonts->AddFontFromFileTTF("mods\\MultiDiva\\assets\\font\\Exo2-Regular.ttf", 16);
 			defaultFont = io.Fonts->AddFontDefault();
 
@@ -414,6 +426,8 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 				bool newEpicBool = LoadTextureFromFile(s.c_str(), &myNumbers[i].texture, &myNumbers[i].width, &myNumbers[i].height);
 				IM_ASSERT(newEpicBool);
 			}
+
+
 		}
 		else
 			return p_present(p_swap_chain, sync_interval, flags);
@@ -446,7 +460,37 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 	//	ImGui::End();
 	//}
 
+	if (show_endgame_menu) {
+		static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->Pos);
+		ImGui::SetNextWindowSize(viewport->Size);
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 0.95f));
+		ImGui::PushFont(exoFontXL);
+		ImGui::Begin("Endgame", &show_fullscreen_menu, flags);
 
+		ImGui::NewLine();
+		ImGui::Indent();
+		ImGui::Indent();
+		ImGui::Text("Results");
+
+		ImGui::PushFont(exoFontLarge);
+		ImGui::NewLine();
+		if (ImGui::BeginTable("table1", 3))
+		{
+			for (int row = 0; row < 4; row++)
+			{
+				ImGui::TableNextRow();
+				for (int column = 0; column < 3; column++)
+				{
+					ImGui::TableSetColumnIndex(column);
+					ImGui::Text("Row %d Column %d", row, column);
+				}
+			}
+			ImGui::EndTable();
+		}
+		ImGui::End();
+	}
 
 	if (show_fullscreen_menu) {
 		static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
@@ -454,7 +498,7 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 		ImGui::SetNextWindowPos(viewport->Pos);
 		ImGui::SetNextWindowSize(viewport->Size);
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 0.95f));
-		ImGui::Begin("Test Fullscreen", &show_fullscreen_menu, flags);
+		ImGui::Begin("Test Fullscreen", &show_fullscreen_menu, flags); 
 		ImGui::NewLine();
 		ImGui::Indent();
 		ImGui::Text("MultiDiva v");
@@ -555,7 +599,7 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 				char other_string[64] = "In game GUI";
 				strcat_s(other_string, integer_string);
 				ImGui::Begin(other_string, &show_ingame_gui, flags);
-				ImGui::PushFont(exoFontLarge);
+				ImGui::PushFont(exoFontMedium);
 				ImGui::Text("UsernameHere");
 				ImGui::PopFont;
 
@@ -648,12 +692,28 @@ int WINAPI main()
 
 		Sleep(50);
 
-		if (GetAsyncKeyState(VK_F10) && !keyPressed) {
+		if (GetAsyncKeyState(VK_F10) && !f10Pressed) {
 			show_fullscreen_menu = !show_fullscreen_menu;
-			keyPressed = true;
+			f10Pressed = true;
 		}
 		if (!GetAsyncKeyState(VK_F10)) {
-			keyPressed = false;
+			f10Pressed = false;
+		}
+
+		if (GetAsyncKeyState(VK_F9) && !f9Pressed) {
+			show_ingame_gui = !show_ingame_gui;
+			f9Pressed = true;
+		}
+		if (!GetAsyncKeyState(VK_F9)) {
+			f9Pressed = false;
+		}
+
+		if (GetAsyncKeyState(VK_F8) && !f8Pressed) {
+			show_endgame_menu = !show_endgame_menu;
+			f8Pressed = true;
+		}
+		if (!GetAsyncKeyState(VK_F8)) {
+			f8Pressed = false;
 		}
 	}
 
