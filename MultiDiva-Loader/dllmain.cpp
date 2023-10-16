@@ -6,6 +6,7 @@
 #include <string>
 #include <iostream>
 #include <fstream> 
+#include <dinput.h>
 
 // Deps
 #include "deps/helpers.h"
@@ -153,6 +154,8 @@ static char serverStatusTooltip[256] = "";
 static char roomStatus[256] = "";
 static char serverVersion[5] = "";
 
+bool gamePaused = false;
+
 NoteData playerScoresForUI[10];
 
 // Mod Library
@@ -168,6 +171,7 @@ typedef void(__cdecl* _ConnectToServer)(const char* serverAddress, const char* s
 typedef void(__cdecl* _LeaveServer)();
 typedef void(__cdecl* _JoinRoom)(const char* roomName);
 typedef void(__cdecl* _CreateRoom)(const char* roomName, bool publicRoom);
+typedef void(_cdecl* _SongRunning)();
 
 
 // Mod Functions
@@ -180,11 +184,11 @@ _ConnectToServer p_ConnectToServer;
 _LeaveServer p_LeaveServer;
 _JoinRoom p_JoinRoom;
 _CreateRoom p_CreateRoom;
+_SongRunning p_SongRunning;
 
 /*
  * Signatures
  */
-
 
  // 1.02: 0x14043B2D0 (Braasileiro)
  // 1.03: 0x14043B310 (Braasileiro)
@@ -210,6 +214,12 @@ void* sigSongEnd = sigScan(
 void* DivaScoreTrigger = sigScan(
 	"\x48\x89\x5C\x24\x00\x48\x89\x74\x24\x00\x48\x89\x7C\x24\x00\x55\x41\x54\x41\x55\x41\x56\x41\x57\x48\x8B\xEC\x48\x83\xEC\x60\x48\x8B\x05\x00\x00\x00\x00\x48\x33\xC4\x48\x89\x45\xF8\x48\x8B\xF9\x80\xB9\x00\x00\x00\x00\x00\x0F\x85\x00\x00\x00\x00",
 	"xxxx?xxxx?xxxx?xxxxxxxxxxxxxxxxxxx????xxxxxxxxxxxx?????xx????"
+);
+
+// 1.03: 0x1511D321E
+void* GameRunningTrigger = sigScan(
+	"\x44\x8b\x81\x00\x00\x00\x00\x89\xd0",
+	"xxx????xx"
 );
 
 /*
@@ -261,6 +271,32 @@ HOOK(int, __fastcall, _PrintResult, DivaScoreTrigger, int a1) {
 	return original_PrintResult(a1);
 }
 
+uintptr_t p = 0x14CC0CB00;
+
+HOOK(void, __fastcall, _SongIsRunning, GameRunningTrigger, __int64 a1, int a2, __int64 a3, char a4) {
+	int gamePaused = *reinterpret_cast<int*>(p);
+
+	if (gamePaused == 0) {
+		INPUT ip;
+		ip.type = INPUT_KEYBOARD;
+		ip.ki.time = 0;
+		ip.ki.wVk = 0;
+		ip.ki.dwExtraInfo = 0;
+		ip.ki.dwFlags = KEYEVENTF_SCANCODE;
+		ip.ki.wScan = DIKEYBOARD_ESCAPE;
+		SendInput(1, &ip, sizeof(INPUT));
+		Sleep(50); // Sleep 50 milliseconds before key up
+		ip.ki.dwFlags = KEYEVENTF_KEYUP; // set the flag so the key goes up so it doesn't repeat keys
+		SendInput(1, &ip, sizeof(INPUT)); // Resend the input
+
+		if (m_Library) {
+			p_SongRunning();
+		}
+	}
+	
+	original_SongIsRunning(a1, a2, a3, a4);
+}
+
 /*
  * ModLoader
  */
@@ -281,12 +317,14 @@ extern "C" __declspec(dllexport) void Init()
 		p_LeaveServer = (_LeaveServer)GetProcAddress(m_Library, "LeaveServer");
 		p_JoinRoom = (_JoinRoom)GetProcAddress(m_Library, "JoinRoom");
 		p_CreateRoom = (_CreateRoom)GetProcAddress(m_Library, "CreateRoom");
+		p_SongRunning = (_SongRunning)GetProcAddress(m_Library, "SongRunning");
 
 		// Install Hooks
 		INSTALL_HOOK(_SongStart);
 		INSTALL_HOOK(_SongEnd);
 		INSTALL_HOOK(_SongPracticeStart);
 		INSTALL_HOOK(_PrintResult);
+		INSTALL_HOOK(_SongIsRunning);
 
 		NoteData myGamer;
 		myGamer.combo = 12;

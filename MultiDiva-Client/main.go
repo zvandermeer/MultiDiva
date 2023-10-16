@@ -148,6 +148,11 @@ func OnScoreTrigger() {
 	go GetFinalScore()
 }
 
+//export SongRunning
+func SongRunning() {
+	fmt.Println("Pressing key")
+}
+
 // use for debugging without diva running
 func main() {
 	//var myData []NoteData
