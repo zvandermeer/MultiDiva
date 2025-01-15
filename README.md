@@ -2,6 +2,8 @@
 
 WIP Experimental multiplayer support for Hatsune Miku: Project Diva MegaMix+
 
+Server-side code can be found [here](https://github.com/zvandermeer/MultiDiva-Server)
+
 ## Build instructions
 
  ### MultiDiva-Loader.dll (C++)
