@@ -31,6 +31,12 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "deps/stb_image.h"
 
+char* initStr(int len) {
+	char* newStr = (char*)malloc(len);
+	if (newStr) newStr[0] = '\0';
+	return newStr;
+}
+
 enum NoteGrade {
 	Cool = 0,
 	Good = 1,
@@ -39,19 +45,68 @@ enum NoteGrade {
 	Good_Wrong = 4
 };
 
-struct NoteData {
+struct UIPlayerScore {
 	bool connectedPlayer;
+	bool isThisPlayer;
+	char* username;
 	int32_t fullScore;
 	int32_t slicedScore[7];
 	int32_t combo;
 	NoteGrade grade;
+
+	UIPlayerScore() {
+		username = initStr(1);
+	}
 };
 
-struct MultiDivaInit_return {
-	bool* connectedToServer;
-	bool* connectedToRoom;
-	int* score;
+struct InGameMenu {
+	// Menu Status
+	bool menuVisible;
+
+	// Menu Data
+	UIPlayerScore scores[10];
 };
+
+InGameMenu myInGameMenu;
+
+struct EndgameMenu {
+	bool menuVisible;
+};
+
+EndgameMenu myEndgameMenu;
+
+struct ConnectionMenu {
+	// Menu Status
+	bool menuVisible;
+	bool connectedToServer;
+	bool connectedToRoom;
+
+	// Display Labels
+	char* pushNotification;
+	char* serverStatus;
+	char* serverStatusTooltip;
+	char* roomStatus;
+	char* serverVersion;
+
+	// Input Fields
+	char* serverAddress;
+	char* serverPort;
+	char* roomName;
+
+	ConnectionMenu() {
+		pushNotification = initStr(1);
+		serverStatus = initStr(1);
+		serverStatusTooltip = initStr(1);
+		roomStatus = initStr(1);
+		serverVersion = initStr(1);
+		serverAddress = initStr(128);
+		serverPort = initStr(5);
+		roomName = initStr(128);
+	}
+};
+
+ConnectionMenu myConnectionMenu;
+
 
 struct Image {
 	ID3D11ShaderResourceView* texture;
@@ -122,21 +177,12 @@ LRESULT __stdcall WndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 	return CallWindowProc(oWndProc, hWnd, uMsg, wParam, lParam);
 }
 
-bool show_menu = true;
-bool show_my_menu = true;
 bool show_canvas = false;
-bool show_ingame_gui = false;
-bool show_fullscreen_menu = false;
-bool show_endgame_menu = false;
 bool f10Pressed = false;
 bool f9Pressed = false;
 bool f8Pressed = false;
 bool publicRoom = true;
-bool* connectedToServer;
-bool* connectedToRoom;
 float speed = 0.5;
-
-MultiDivaInit_return myInitReturn;
 
 bool init = false;
 HWND window = NULL;
@@ -144,25 +190,11 @@ ID3D11Device* p_device = NULL;
 ID3D11DeviceContext* p_context = NULL;
 ID3D11RenderTargetView* mainRenderTargetView = NULL;
 
-static char serverAddress[128] = "";
-static char serverPort[5] = "9988";
-static char roomName[128] = "";
-
-static char pushNotification[256] = "";
-static char serverStatus[256] = "";
-static char serverStatusTooltip[256] = "";
-static char roomStatus[256] = "";
-static char serverVersion[5] = "";
-
-bool gamePaused = false;
-
-NoteData playerScoresForUI[10];
-
 // Mod Library
 HMODULE m_Library;
 
 // Mod Types
-typedef MultiDivaInit_return(__cdecl* _OnInit)(char* pushNotification, char* serverStatus, char* serverStatusTooltip, char* roomStatus, char* serverVersion, NoteData[]);
+typedef void(__cdecl* _OnInit)(ConnectionMenu*, InGameMenu*, EndgameMenu*);
 typedef void(__cdecl* _OnDispose)();
 typedef void(__cdecl* _OnSongUpdate)(int songId, bool isPractice);
 typedef void(__cdecl* _MainLoop)();
@@ -171,7 +203,7 @@ typedef void(__cdecl* _ConnectToServer)(const char* serverAddress, const char* s
 typedef void(__cdecl* _LeaveServer)();
 typedef void(__cdecl* _JoinRoom)(const char* roomName);
 typedef void(__cdecl* _CreateRoom)(const char* roomName, bool publicRoom);
-typedef void(_cdecl* _SongRunning)();
+//typedef void(_cdecl* _SongRunning)();
 
 
 // Mod Functions
@@ -184,7 +216,7 @@ _ConnectToServer p_ConnectToServer;
 _LeaveServer p_LeaveServer;
 _JoinRoom p_JoinRoom;
 _CreateRoom p_CreateRoom;
-_SongRunning p_SongRunning;
+//_SongRunning p_SongRunning;
 
 /*
  * Signatures
@@ -216,11 +248,11 @@ void* DivaScoreTrigger = sigScan(
 	"xxxx?xxxx?xxxx?xxxxxxxxxxxxxxxxxxx????xxxxxxxxxxxx?????xx????"
 );
 
-// 1.03: 0x1511D321E
-void* GameRunningTrigger = sigScan(
-	"\x44\x8b\x81\x00\x00\x00\x00\x89\xd0",
-	"xxx????xx"
-);
+//// 1.03: 0x1511D321E
+//void* GameRunningTrigger = sigScan(
+//	"\x44\x8b\x81\x00\x00\x00\x00\x89\xd0",
+//	"xxx????xx"
+//);
 
 /*
  * Hooks
@@ -232,7 +264,7 @@ HOOK(void, __fastcall, _SongStart, sigSongStart, int songId)
 		// Playing
 		p_OnSongUpdate(songId, false);
 
-		show_ingame_gui = true;
+		myInGameMenu.menuVisible = true;
 	}
 
 	original_SongStart(songId);
@@ -265,37 +297,37 @@ HOOK(int, __fastcall, _PrintResult, DivaScoreTrigger, int a1) {
 	if (m_Library) {
 		p_OnScoreTrigger();
 
-		show_ingame_gui = false;
+		myInGameMenu.menuVisible = false;
 	}
 
 	return original_PrintResult(a1);
 }
 
-uintptr_t p = 0x14CC0CB00;
-
-HOOK(void, __fastcall, _SongIsRunning, GameRunningTrigger, __int64 a1, int a2, __int64 a3, char a4) {
-	int gamePaused = *reinterpret_cast<int*>(p);
-
-	if (gamePaused == 0) {
-		INPUT ip;
-		ip.type = INPUT_KEYBOARD;
-		ip.ki.time = 0;
-		ip.ki.wVk = 0;
-		ip.ki.dwExtraInfo = 0;
-		ip.ki.dwFlags = KEYEVENTF_SCANCODE;
-		ip.ki.wScan = DIKEYBOARD_ESCAPE;
-		SendInput(1, &ip, sizeof(INPUT));
-		Sleep(50); // Sleep 50 milliseconds before key up
-		ip.ki.dwFlags = KEYEVENTF_KEYUP; // set the flag so the key goes up so it doesn't repeat keys
-		SendInput(1, &ip, sizeof(INPUT)); // Resend the input
-
-		if (m_Library) {
-			p_SongRunning();
-		}
-	}
-	
-	original_SongIsRunning(a1, a2, a3, a4);
-}
+//uintptr_t p = 0x14CC0CB00;
+//
+//HOOK(void, __fastcall, _SongIsRunning, GameRunningTrigger, __int64 a1, int a2, __int64 a3, char a4) {
+//	int gamePaused = *reinterpret_cast<int*>(p);
+//
+//	if (gamePaused == 0) {
+//		INPUT ip;
+//		ip.type = INPUT_KEYBOARD;
+//		ip.ki.time = 0;
+//		ip.ki.wVk = 0;
+//		ip.ki.dwExtraInfo = 0;
+//		ip.ki.dwFlags = KEYEVENTF_SCANCODE;
+//		ip.ki.wScan = DIKEYBOARD_ESCAPE;
+//		SendInput(1, &ip, sizeof(INPUT));
+//		Sleep(50); // Sleep 50 milliseconds before key up
+//		ip.ki.dwFlags = KEYEVENTF_KEYUP; // set the flag so the key goes up so it doesn't repeat keys
+//		SendInput(1, &ip, sizeof(INPUT)); // Resend the input
+//
+//		if (m_Library) {
+//			p_SongRunning();
+//		}
+//	}
+//	
+//	original_SongIsRunning(a1, a2, a3, a4);
+//}
 
 /*
  * ModLoader
@@ -317,16 +349,17 @@ extern "C" __declspec(dllexport) void Init()
 		p_LeaveServer = (_LeaveServer)GetProcAddress(m_Library, "LeaveServer");
 		p_JoinRoom = (_JoinRoom)GetProcAddress(m_Library, "JoinRoom");
 		p_CreateRoom = (_CreateRoom)GetProcAddress(m_Library, "CreateRoom");
-		p_SongRunning = (_SongRunning)GetProcAddress(m_Library, "SongRunning");
+		//p_SongRunning = (_SongRunning)GetProcAddress(m_Library, "SongRunning");
 
 		// Install Hooks
 		INSTALL_HOOK(_SongStart);
 		INSTALL_HOOK(_SongEnd);
 		INSTALL_HOOK(_SongPracticeStart);
 		INSTALL_HOOK(_PrintResult);
-		INSTALL_HOOK(_SongIsRunning);
+		//INSTALL_HOOK(_SongIsRunning);
 
-		NoteData myGamer;
+		UIPlayerScore myGamer;
+		myGamer.connectedPlayer = true;
 		myGamer.combo = 12;
 		myGamer.fullScore = 7258571;
 		myGamer.grade = Good;
@@ -338,22 +371,26 @@ extern "C" __declspec(dllexport) void Init()
 		myGamer.slicedScore[5] = 7;
 		myGamer.slicedScore[6] = 1;
 
-		NoteData myGamer2;
+		UIPlayerScore myGamer2;
+		myGamer2.connectedPlayer = true;
 		myGamer2.combo = 42;
 		myGamer2.fullScore = 370;
 		myGamer2.grade = Safe;
-		myGamer2.slicedScore[0] = 3;
-		myGamer2.slicedScore[1] = 7;
+		myGamer2.slicedScore[0] = 0;
+		myGamer2.slicedScore[1] = 0;
 		myGamer2.slicedScore[2] = 0;
+		myGamer2.slicedScore[3] = 0;
+		myGamer2.slicedScore[4] = 3;
+		myGamer2.slicedScore[5] = 7;
+		myGamer2.slicedScore[6] = 0;
 
-		playerScoresForUI[0] = myGamer;
-		playerScoresForUI[1] = myGamer2;
+		myInGameMenu.scores[0] = myGamer;
+		myInGameMenu.scores[1] = myGamer2;
+
+		//strcpy_s(myConnectionMenu.serverAddress, "I love Kasane Teto so much");
 
 		// Mod Entry Point
-		myInitReturn = p_OnInit(pushNotification, serverStatus, serverStatusTooltip, roomStatus, serverVersion, playerScoresForUI);
-
-		connectedToServer = myInitReturn.connectedToServer;
-		connectedToRoom = myInitReturn.connectedToRoom;
+		p_OnInit(&myConnectionMenu, &myInGameMenu, &myEndgameMenu);
 	}
 }
 
@@ -498,14 +535,14 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 	//	ImGui::End();
 	//}
 
-	if (show_endgame_menu) {
+	if (myEndgameMenu.menuVisible) {
 		static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGui::SetNextWindowPos(viewport->Pos);
 		ImGui::SetNextWindowSize(viewport->Size);
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 0.95f));
 		ImGui::PushFont(exoFontXL);
-		ImGui::Begin("Endgame", &show_fullscreen_menu, flags);
+		ImGui::Begin("Endgame", &myEndgameMenu.menuVisible, flags);
 
 		ImGui::NewLine();
 		ImGui::Indent();
@@ -530,27 +567,27 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 		ImGui::End();
 	}
 
-	if (show_fullscreen_menu) {
+	if (myConnectionMenu.menuVisible) {
 		static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGui::SetNextWindowPos(viewport->Pos);
 		ImGui::SetNextWindowSize(viewport->Size);
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 0.95f));
-		ImGui::Begin("Test Fullscreen", &show_fullscreen_menu, flags); 
+		ImGui::Begin("Test Fullscreen", &myConnectionMenu.menuVisible, flags);
 		ImGui::NewLine();
 		ImGui::Indent();
 		ImGui::Text("MultiDiva v");
-		ImGui::SameLine(0,0);
-		ImGui::Text(serverVersion);
+		ImGui::SameLine(0, 0);
+		ImGui::Text(myConnectionMenu.serverVersion);
 		if (ImGui::CollapsingHeader("Server")) {
 			ImGui::Text("Server address: ");
-			ImGui::InputText("##serverAddressInput", serverAddress, IM_ARRAYSIZE(serverAddress));
+			ImGui::InputText("##serverAddressInput", myConnectionMenu.serverAddress, IM_ARRAYSIZE(myConnectionMenu.serverAddress));
 			ImGui::Text("Server port: ");
-			ImGui::InputText("##serverPortInput", serverPort, IM_ARRAYSIZE(serverPort));
-			if (!*connectedToServer) {
+			ImGui::InputText("##serverPortInput", myConnectionMenu.serverPort, IM_ARRAYSIZE(myConnectionMenu.serverPort));
+			if (!myConnectionMenu.connectedToServer) {
 				if (ImGui::Button("Connect")) {
 					if (m_Library) {
-						p_ConnectToServer(serverAddress, serverPort);
+						p_ConnectToServer(myConnectionMenu.serverAddress, myConnectionMenu.serverPort);
 					}
 				}
 			}
@@ -562,36 +599,36 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 				}
 			}
 			ImGui::SameLine();
-			ImGui::Text(serverStatus);
-			if (ImGui::IsItemHovered() && strcmp(serverStatusTooltip, "") != 0) {
-				ImGui::SetTooltip(serverStatusTooltip);
+			ImGui::Text(myConnectionMenu.serverStatus);
+			if (ImGui::IsItemHovered() && strcmp(myConnectionMenu.serverStatusTooltip, "") != 0) {
+				ImGui::SetTooltip(myConnectionMenu.serverStatusTooltip);
 			}
 		}
-		if (!*connectedToServer) {
+		if (!myConnectionMenu.connectedToServer) {
 			ImGui::BeginDisabled();
 		}
 		if (ImGui::CollapsingHeader("Room")) {
-			if (*connectedToRoom) {
+			if (myConnectionMenu.connectedToRoom) {
 				ImGui::BeginDisabled();
 			}
 			ImGui::Text("Room name: ");
-			ImGui::InputText("##roomNameInput", roomName, IM_ARRAYSIZE(roomName));
+			ImGui::InputText("##roomNameInput", myConnectionMenu.roomName, IM_ARRAYSIZE(myConnectionMenu.roomName));
 			ImGui::Text("Public room? ");
 			ImGui::SameLine();
 			ImGui::Checkbox("##publicRoomCheckbox", &publicRoom);
-			if (*connectedToRoom) {
+			if (myConnectionMenu.connectedToRoom) {
 				ImGui::EndDisabled();
 			}
-			if (!*connectedToRoom) {
+			if (!myConnectionMenu.connectedToRoom) {
 				if (ImGui::Button("Join")) {
 					if (m_Library) {
-						p_JoinRoom(roomName);
+						p_JoinRoom(myConnectionMenu.roomName);
 					}
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("Create")) {
 					if (m_Library) {
-						p_CreateRoom(roomName, true);
+						p_CreateRoom(myConnectionMenu.roomName, true);
 					}
 				}
 			}
@@ -601,9 +638,9 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 				}
 			}
 			ImGui::SameLine();
-			ImGui::Text(roomStatus);
+			ImGui::Text(myConnectionMenu.roomStatus);
 		}
-		if (!*connectedToServer) {
+		if (!myConnectionMenu.connectedToServer) {
 			ImGui::EndDisabled();
 		}
 		if (ImGui::CollapsingHeader("Funny Pictures")) {
@@ -611,19 +648,21 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 			ImGui::Text("size = %d x %d", my_image_width, my_image_height);
 			ImGui::Image((void*)coolTexture.texture, ImVec2(coolTexture.width, coolTexture.height));
 			for (int i = 0; i < 10; i++) {
+				if(i != 0) ImGui::SameLine();
 				ImGui::Image((void*)myNumbers[i].texture, ImVec2(32, 32));
-				ImGui::SameLine();
 			}
 			ImGui::Text("Show in game gui?");
-			ImGui::Checkbox("##inGameGUI", &show_ingame_gui);
+			ImGui::SameLine();
+			ImGui::Checkbox("##inGameGUI", &myInGameMenu.menuVisible);
 			ImGui::Checkbox("Canvas", &show_canvas);
 		}
 		ImGui::End();
 	}
 
-	if (show_ingame_gui) {
+	if (myInGameMenu.menuVisible) {
 		for (int i = 0; i < 10; i++) {
-			if (playerScoresForUI[i].connectedPlayer == true) {
+			UIPlayerScore thisPlayer = myInGameMenu.scores[i];
+			if (thisPlayer.connectedPlayer == true) {
 				static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
 				const ImGuiViewport* viewport = ImGui::GetMainViewport();
 
@@ -636,13 +675,13 @@ static long __stdcall detour_present(IDXGISwapChain* p_swap_chain, UINT sync_int
 				sprintf_s(integer_string, "%d", i);
 				char other_string[64] = "In game GUI";
 				strcat_s(other_string, integer_string);
-				ImGui::Begin(other_string, &show_ingame_gui, flags);
+				ImGui::Begin(other_string, &myInGameMenu.menuVisible, flags);
 				ImGui::PushFont(exoFontMedium);
-				ImGui::Text("UsernameHere");
+				ImGui::Text(thisPlayer.username);
 				ImGui::PopFont;
 
 				for (int j = 0; j < 7; j++) {
-					ImGui::Image((void*)myNumbers[playerScoresForUI[i].slicedScore[j]].texture, ImVec2(viewport->Size.x / 64, viewport->Size.x / 64));
+					ImGui::Image((void*)myNumbers[thisPlayer.slicedScore[j]].texture, ImVec2(viewport->Size.x / 64, viewport->Size.x / 64));
 					if (viewport->Size.x == 1280) {
 						ImGui::SameLine(0, 0.1);
 					}
@@ -731,7 +770,7 @@ int WINAPI main()
 		Sleep(50);
 
 		if (GetAsyncKeyState(VK_F10) && !f10Pressed) {
-			show_fullscreen_menu = !show_fullscreen_menu;
+			myConnectionMenu.menuVisible = !myConnectionMenu.menuVisible;
 			f10Pressed = true;
 		}
 		if (!GetAsyncKeyState(VK_F10)) {
@@ -739,7 +778,7 @@ int WINAPI main()
 		}
 
 		if (GetAsyncKeyState(VK_F9) && !f9Pressed) {
-			show_ingame_gui = !show_ingame_gui;
+			myInGameMenu.menuVisible = !myInGameMenu.menuVisible;
 			f9Pressed = true;
 		}
 		if (!GetAsyncKeyState(VK_F9)) {
@@ -747,7 +786,7 @@ int WINAPI main()
 		}
 
 		if (GetAsyncKeyState(VK_F8) && !f8Pressed) {
-			show_endgame_menu = !show_endgame_menu;
+			myEndgameMenu.menuVisible = !myEndgameMenu.menuVisible;
 			f8Pressed = true;
 		}
 		if (!GetAsyncKeyState(VK_F8)) {

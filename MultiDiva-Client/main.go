@@ -1,9 +1,10 @@
 package main
 
 /*
-#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <stdint.h>
 
 enum NoteGrade {
 	Cool = 0,
@@ -13,12 +14,37 @@ enum NoteGrade {
 	Good_Wrong = 4
 };
 
-struct NoteData {
+struct UIPlayerScore {
 	bool connectedPlayer;
-	int fullScore;
-	int slicedScore[7];
-	int combo;
+	int32_t fullScore;
+	int32_t slicedScore[7];
+	int32_t combo;
 	enum NoteGrade grade;
+};
+
+struct InGameMenu {
+	bool menuVisible;
+	struct UIPlayerScore* scores[10];
+};
+
+struct EndgameMenu {
+	bool menuVisible;
+};
+
+struct ConnectionMenu {
+	bool menuVisible;
+	bool connectedToServer;
+	bool connectedToRoom;
+
+	char* pushNotification;
+	char* serverStatus;
+	char* serverStatusTooltip;
+	char* roomStatus;
+	char* serverVersion;
+
+	char* serverAddress;
+	char* serverPort;
+	char* roomName;
 };
 */
 import "C"
@@ -37,45 +63,38 @@ const (
 
 var cfg ConfigData
 
-var connectedToServer bool
-var connectedToRoom bool
-var pushNotification *C.char
-var serverStatus *C.char
-var serverStatusTooltip *C.char
-var roomStatus *C.char
-var serverVersion *C.char
+func setCStr(stringToSet **C.char, newString string) {
+	newCString := C.CString(newString)
+	oldCString := *stringToSet
+	C.free(unsafe.Pointer(oldCString))
+	*stringToSet = newCString
+}
 
-type NoteDataC C.struct_NoteData
-
-var UINoteData []NoteDataC
+var ConnectionMenu *C.struct_ConnectionMenu
+var InGameMenu *C.struct_InGameMenu
+var EndgameMenu *C.struct_EndgameMenu
 
 //export MultiDivaInit
-func MultiDivaInit(_pushNotification *C.char, _serverStatus *C.char, _serverStatusTooltip *C.char, _roomStatus *C.char, _serverVersion *C.char, playerScoresForUI *NoteDataC) (*bool, *bool) {
+func MultiDivaInit(_connectionMenu *C.struct_ConnectionMenu, _ingameMenu *C.struct_InGameMenu, _endgameMenu *C.struct_EndgameMenu) {
 	fmt.Println("[MultiDiva] Initializing MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "...")
 
-	pushNotification = _pushNotification
-	serverStatus = _serverStatus
-	serverStatusTooltip = _serverStatusTooltip
-	roomStatus = _roomStatus
-	serverVersion = _serverVersion
+	ConnectionMenu = _connectionMenu
+	InGameMenu = _ingameMenu
+	EndgameMenu = _endgameMenu
 
 	versionString := strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion)
 
-	setUIString(serverVersion, versionString, 5)
-
-	UINoteData = unsafe.Slice(playerScoresForUI, 10)
-	UINoteData[0].connectedPlayer = true
+	setCStr(&ConnectionMenu.serverVersion, versionString)
 
 	cfg = LoadConfig()
-	return &connectedToServer, &connectedToRoom
 }
 
 //export LeaveServer
 func LeaveServer() {
 	CloseClient()
 	ReceivingChannel <- "logout"
-	setUIString(serverStatus, "Disconnected from server successfully!", 256)
-	setUIString(serverStatusTooltip, "", 256)
+	setCStr(&ConnectionMenu.serverStatus, "Disconnected from server successfully!")
+	setCStr(&ConnectionMenu.serverStatusTooltip, "")
 }
 
 //export ConnectToServer
@@ -88,9 +107,9 @@ func ConnectToServer(serverAddress *C.char, serverPort *C.char) {
 		<-ReceivingChannel
 	}
 
-	connectedToServer = Connect(C.GoString(serverAddress), C.GoString(serverPort))
+	ConnectionMenu.connectedToServer = C.bool(Connect(C.GoString(serverAddress), C.GoString(serverPort)))
 
-	if connectedToServer {
+	if ConnectionMenu.connectedToServer {
 		fmt.Println("Connected!")
 		go SendingThread()
 		go ReceivingThread()
@@ -125,7 +144,7 @@ func JoinRoom(roomName *C.char) {
 
 //export MainLoop
 func MainLoop() {
-	if connectedToServer {
+	if ConnectionMenu.connectedToServer {
 		go GetFrameScore()
 	}
 }
