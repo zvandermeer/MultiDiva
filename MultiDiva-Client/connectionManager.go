@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+
+
 type Client struct {
 	Connected             bool
 	Connection            net.Conn
@@ -17,16 +19,14 @@ type Client struct {
 	OutgoingMessageBuffer chan []byte
 }
 
-func NewClient(serverAddress string, serverPort string) *Client {
-	c := Client{}
+func NewClient(serverAddress string, serverPort string) (c *Client) {
+	c = &Client{}
 	var err error
 
 	c.Connection, err = net.Dial("tcp", serverAddress+":"+serverPort)
 	if err != nil {
-		fmt.Println("[MultiDiva] Error connecting to MultiDiva server'" + cfg.ServerAddress + ":" + cfg.Port + "', MultiDiva is not active.")
-		if cfg.Debug {
-			fmt.Println("[MultiDiva] Error details:", err.Error())
-		}
+		divalog.Log("[MultiDiva] Error connecting to MultiDiva server'" + cfg.ServerAddress + ":" + cfg.Port + "'", 0)
+		divalog.Log("[MultiDiva] Error details:" + err.Error(), 1)
 		return nil
 	}
 
@@ -39,18 +39,18 @@ func NewClient(serverAddress string, serverPort string) *Client {
 		"MinorClientVersion": strconv.Itoa(MinorClientVersion),
 		"Username":           cfg.Username,
 	}
-	
+
 	c.sendJsonMessage(myData)
 
 	go c.listen()
 	go c.write()
 	go c.processPackets()
 
-	return &c
+	return
 }
 
 func (c Client) listen() {
-	fmt.Println("Starting listening thread")
+	divalog.Log("Starting listening thread", 2)
 
 	buffer := make([]byte, 1024)
 
@@ -58,17 +58,15 @@ func (c Client) listen() {
 		messageLen, err := c.Connection.Read(buffer)
 
 		if err != nil {
-			fmt.Println("[MultiDiva] Error receiving score from " + cfg.ServerAddress + ":" + cfg.Port + ".")
+			divalog.Log("Error receiving score from " + cfg.ServerAddress + ":" + cfg.Port, 0)
 			if strings.Contains(err.Error(), "An existing connection was forcibly closed by the remote host") || strings.Contains(err.Error(), "EOF") {
-				fmt.Println("[MultiDiva] Unexpected server closure.")
+				divalog.Log("Unexpected server closure.", 0)
 				setCStr(&ConnectionMenu.serverStatus, "Unexpected server closure")
 				setCStr(&ConnectionMenu.serverStatusTooltip, "")
 				setCStr(&ConnectionMenu.pushNotification, "[NOTICE] Server connection closed unexpectedly!")
 				c.close()
 			}
-			if cfg.Debug {
-				fmt.Println("[MultiDiva] Error details: ", err.Error())
-			}
+			divalog.Log("Error details: " + err.Error(), 1)
 			break
 		}
 
@@ -85,13 +83,16 @@ func (c Client) listen() {
 			c.processJSON(serverMessageBytes)
 		}
 	}
+
+	divalog.Log("Closing listening thread", 2)
 }
 
 func (c Client) processJSON(jsonMessage []byte) {
 	var data map[string]interface{}
 
 	if err := json.Unmarshal(jsonMessage, &data); err != nil {
-		panic(err)
+		divalog.Log("[MultiDiva] An error occured processing a server instruction", 0)
+		divalog.Log("[MultiDiva] Error details:" + err.Error(), 1)
 	} else {
 		c.IncomingMessageBuffer <- data
 	}
@@ -105,7 +106,7 @@ processingLoop:
 
 		instruction := data["Instruction"].(string)
 
-		fmt.Println("INSTRUCTION: " + instruction)
+		divalog.Log("INSTRUCTION: " + instruction, 2)
 
 		switch instruction {
 
@@ -126,11 +127,17 @@ processingLoop:
 		case "invalidLogin":
 			setCStr(&ConnectionMenu.serverStatus, "An unknown login error occurred. Please try to login again.")
 			setCStr(&ConnectionMenu.serverStatusTooltip, "")
-			fmt.Println("Unknown login error")
+			divalog.Log("Unknown login error", 1)
 
 		case "versionMismatch":
-			MajorServerVersion, _ := strconv.Atoi(data["MajorServerVersion"].(string))
-			MinorServerVersion, _ := strconv.Atoi(data["MinorServerVersion"].(string))
+			MajorServerVersion, err := strconv.Atoi(data["MajorServerVersion"].(string))
+			if err != nil {
+				divalog.Log("[MultiDiva] Error details:" + err.Error(), 1)
+			}
+			MinorServerVersion, err := strconv.Atoi(data["MinorServerVersion"].(string))
+			if err != nil {
+				divalog.Log("[MultiDiva] Error details:" + err.Error(), 1)
+			}
 
 			var outdated string
 
@@ -151,9 +158,18 @@ processingLoop:
 			c.close()
 
 		case "note":
-			score, _ := strconv.Atoi(data["Score"].(string))
-			combo, _ := strconv.Atoi(data["Combo"].(string))
-			ranking, _ := strconv.Atoi(data["ranking"].(string))
+			score, err := strconv.Atoi(data["Score"].(string))
+			if err != nil  {
+				divalog.Log(err.Error(), 1)
+			}
+			combo, err := strconv.Atoi(data["Combo"].(string))
+			if err != nil {
+				divalog.Log(err.Error(), 1)
+			}
+			ranking, err := strconv.Atoi(data["ranking"].(string))
+			if err != nil {
+				divalog.Log(err.Error(), 1)
+			}
 
 			InGameMenu.scores[ranking].connectedPlayer = true
 
@@ -170,11 +186,12 @@ processingLoop:
 				}
 			}
 
-			gradeInt, _ := strconv.Atoi(data["Grade"].(string))
+			gradeInt, err := strconv.Atoi(data["Grade"].(string))
+			if err != nil {
+				divalog.Log(err.Error(), 1)
+			}
 
 			InGameMenu.scores[ranking].grade = uint32(gradeInt)
-
-			fmt.Println(InGameMenu.scores)
 
 		case "roomConnectionUpdate":
 			roomName := data["RoomName"].(string)
@@ -198,39 +215,35 @@ processingLoop:
 			}
 
 		default:
-			fmt.Println("Unknown command")
-			fmt.Println(data)
+			divalog.Log("Unknown command", 1)
+			divalog.Log(fmt.Sprintf("%#v", data), 1)
 		}
 	}
 }
 
 func (c Client) write() {
-	fmt.Println("Starting sending thread")
+	divalog.Log("Starting sending thread", 2)
 
 	for {
 		incomingData := <-c.OutgoingMessageBuffer
 
 		if _, err := c.Connection.Write(incomingData); err != nil {
-			fmt.Println("[MultiDiva] Error sending data to", cfg.ServerAddress+":"+cfg.Port+", data/score not sent.")
-			if cfg.Debug {
-				fmt.Println("[MultiDiva]  Error details: ", err)
-			}
+			divalog.Log("Error sending data to" + cfg.ServerAddress + ":" + cfg.Port + ", data/score not sent.", 0)
+			divalog.Log("Error details: " + err.Error(), 1)
 		}
 
 		if bytes.Equal(incomingData, []byte("{\"Instruction\":\"clientLogout\"}")) {
 			err := c.Connection.Close()
-			if err != nil {
-				panic(err)
-			}
+			divalog.Log("Error details:" + err.Error(), 1)
 			break
 		}
 	}
 
-	fmt.Println("Exiting sending thread")
+	divalog.Log("Exiting sending thread", 2)
 }
 
 func (c Client) close() {
-	fmt.Println("Client logging out...")
+	divalog.Log("Client logging out...", 2)
 	c.sendSimpleInstruction("clientLogout")
 
 	m := map[string]interface{}{
@@ -253,9 +266,7 @@ func (c Client) sendSimpleInstruction(instruction string) {
 
 func (c Client) sendJsonMessage(message map[string]string) {
 	data, err := json.Marshal(message)
-	if err != nil {
-		fmt.Println(err)
-	}
+	divalog.Log(err.Error(), 1)
 
 	c.OutgoingMessageBuffer <- data
 }

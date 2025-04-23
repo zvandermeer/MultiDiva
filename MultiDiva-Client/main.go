@@ -49,7 +49,6 @@ struct ConnectionMenu {
 */
 import "C"
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"unsafe"
@@ -68,9 +67,11 @@ var ConnectionMenu *C.struct_ConnectionMenu
 var InGameMenu *C.struct_InGameMenu
 var EndgameMenu *C.struct_EndgameMenu
 
+var divalog DivaLog
+
 //export MultiDivaInit
 func MultiDivaInit(_connectionMenu *C.struct_ConnectionMenu, _ingameMenu *C.struct_InGameMenu, _endgameMenu *C.struct_EndgameMenu) {
-	fmt.Println("[MultiDiva] Initializing MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "...")
+	divalog.Log("Initializing MultiDiva v" + strconv.Itoa(MajorClientVersion) + "." + strconv.Itoa(MinorClientVersion) + "...", 0)
 
 	ConnectionMenu = _connectionMenu
 	InGameMenu = _ingameMenu
@@ -95,7 +96,7 @@ func ConnectToServer(serverAddress *C.char, serverPort *C.char) {
 	thisClient := NewClient(C.GoString(serverAddress), C.GoString(serverPort))
 
 	if thisClient != nil {
-		fmt.Println("Connected!")
+		divalog.Log("Connected!", 2)
 		ConnectionMenu.connectedToServer = true
 	}
 }
@@ -131,7 +132,7 @@ func MainLoop() {
 
 //export SongUpdate
 func SongUpdate(songID C.int, isPractice bool) {
-	fmt.Println("Song updated: ID " + strconv.Itoa(int(songID)) + ", IsPractice: " + strconv.FormatBool(isPractice))
+	divalog.Log("Song updated: ID " + strconv.Itoa(int(songID)) + ", IsPractice: " + strconv.FormatBool(isPractice), 2)
 	InGameMenu.menuVisible = true
 }
 
@@ -142,6 +143,7 @@ func OnScoreTrigger() {
 
 //export MultiDivaDispose
 func MultiDivaDispose() {
+	divalog.logFile.Close()
 	myClient.close()
 }
 
