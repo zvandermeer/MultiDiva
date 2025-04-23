@@ -2,11 +2,73 @@ package main
 
 import "C"
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"unsafe"
 )
+
+type DivaScore struct {
+	TotalScore     uint32
+	Unknown1       uint32
+	Unknown2       uint32
+	Unknown3       uint32
+	Unknown4       uint32
+	Unknown5       uint32
+	Unknown6       uint32
+	Unknown7       uint32
+	Unknown8       uint32
+	Combo          uint32
+	PreAdjustCool  uint32
+	PreAdjustFine  uint32
+	PreAdjustSafe  uint32
+	PreAdjustSad   uint32
+	PreAdjustWorst uint32
+	Cool           uint32
+	Fine           uint32
+	Safe           uint32
+	Sad            uint32
+	Worst          uint32
+}
+
+// Due to how holds are added to the score by Diva, tracking "Bad", "Wrong Bad" and "Wrong Safe" grades isn't possible through this method
+type NoteGrade int64
+
+const (
+	Cool NoteGrade = iota
+	Good
+	Safe
+	Cool_Wrong
+	Good_Wrong
+)
+
+type FinalGrade int64
+
+const (
+	Failed FinalGrade = iota
+	Cheap
+	Standard
+	Great
+	Excellent
+	Perfect
+)
+
+type Difficulty int64
+
+const (
+	Easy Difficulty = iota
+	Normal
+	Hard
+	Extreme
+	ExExtreme
+)
+
+type NoteData struct {
+	FullScore   int32
+	SlicedScore []int32
+	Combo       int32
+	Grade       NoteGrade
+}
+
 
 const (
 	MainScoreAddress            = uintptr(0x00000001412EF568)
@@ -90,13 +152,14 @@ func GetFrameScore() {
 			fmt.Print("Note Grade:")
 			fmt.Println(noteGrade)
 
-			myData, _ := json.Marshal(map[string]string{
+			myData := map[string]string{
 				"Instruction": "note",
 				"Score":       strconv.Itoa(score),
 				"Combo":       strconv.Itoa(combo),
-				"Grade":       fmt.Sprintf("%d", int(noteGrade))})
+				"Grade":       fmt.Sprintf("%d", int(noteGrade)),
+			}
 
-			SendingMutex.Store(myData)
+			myClient.sendJsonMessage(myData)
 		}
 	}
 }
@@ -137,7 +200,7 @@ func GetFinalScore() {
 	fmt.Print("Grade: ")
 	fmt.Println(PVGrade)
 
-	myData, _ := json.Marshal(map[string]string{
+	myData := map[string]string{
 		"Instruction": "finalScore",
 		"TotalScore":  strconv.FormatUint(uint64(myScore.TotalScore), 10),
 		"Combo":       strconv.FormatUint(uint64(myScore.Combo), 10),
@@ -149,9 +212,10 @@ func GetFinalScore() {
 		"Completion":  fmt.Sprintf("%f", completePercent),
 		"PV":          strconv.FormatUint(uint64(PVId), 10),
 		"Difficulty":  strconv.FormatUint(uint64(PVDiff), 10),
-		"Grade":       strconv.FormatUint(uint64(PVGrade), 10)})
+		"Grade":       strconv.FormatUint(uint64(PVGrade), 10),
+	}
 
-	SendingChannel <- myData
+	myClient.sendJsonMessage(myData)
 }
 
 // split integer into slice of single digits

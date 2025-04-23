@@ -49,7 +49,6 @@ struct ConnectionMenu {
 */
 import "C"
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -63,12 +62,7 @@ const (
 
 var cfg ConfigData
 
-func setCStr(stringToSet **C.char, newString string) {
-	newCString := C.CString(newString)
-	oldCString := *stringToSet
-	C.free(unsafe.Pointer(oldCString))
-	*stringToSet = newCString
-}
+var myClient Client
 
 var ConnectionMenu *C.struct_ConnectionMenu
 var InGameMenu *C.struct_InGameMenu
@@ -91,28 +85,18 @@ func MultiDivaInit(_connectionMenu *C.struct_ConnectionMenu, _ingameMenu *C.stru
 
 //export LeaveServer
 func LeaveServer() {
-	CloseClient()
-	ReceivingChannel <- "logout"
 	setCStr(&ConnectionMenu.serverStatus, "Disconnected from server successfully!")
 	setCStr(&ConnectionMenu.serverStatusTooltip, "")
+	myClient.close()
 }
 
 //export ConnectToServer
 func ConnectToServer(serverAddress *C.char, serverPort *C.char) {
-	// Clear out both channels before new connection
-	for len(SendingChannel) > 0 {
-		<-SendingChannel
-	}
-	for len(ReceivingChannel) > 0 {
-		<-ReceivingChannel
-	}
+	thisClient := NewClient(C.GoString(serverAddress), C.GoString(serverPort))
 
-	ConnectionMenu.connectedToServer = C.bool(Connect(C.GoString(serverAddress), C.GoString(serverPort)))
-
-	if ConnectionMenu.connectedToServer {
+	if thisClient != nil {
 		fmt.Println("Connected!")
-		go SendingThread()
-		go ReceivingThread()
+		ConnectionMenu.connectedToServer = true
 	}
 }
 
@@ -125,9 +109,7 @@ func CreateRoom(roomName *C.char, publicRoom bool) {
 		"publicRoom":        strconv.FormatBool(publicRoom),
 	}
 
-	data, _ := json.Marshal(m)
-
-	SendingChannel <- data
+	myClient.sendJsonMessage(m)
 }
 
 //export JoinRoom
@@ -137,9 +119,7 @@ func JoinRoom(roomName *C.char) {
 		"roomName":    C.GoString(roomName),
 	}
 
-	data, _ := json.Marshal(m)
-
-	SendingChannel <- data
+	myClient.sendJsonMessage(m)
 }
 
 //export MainLoop
@@ -151,15 +131,8 @@ func MainLoop() {
 
 //export SongUpdate
 func SongUpdate(songID C.int, isPractice bool) {
-	go fmt.Println("Received")
-	go fmt.Println(songID)
-	go fmt.Println(isPractice)
-}
-
-//export MultiDivaDispose
-func MultiDivaDispose() {
-	CloseClient()
-	ReceivingChannel <- "logout"
+	fmt.Println("Song updated: ID " + strconv.Itoa(int(songID)) + ", IsPractice: " + strconv.FormatBool(isPractice))
+	InGameMenu.menuVisible = true
 }
 
 //export OnScoreTrigger
@@ -167,9 +140,16 @@ func OnScoreTrigger() {
 	go GetFinalScore()
 }
 
-//export SongRunning
-func SongRunning() {
-	fmt.Println("Pressing key")
+//export MultiDivaDispose
+func MultiDivaDispose() {
+	myClient.close()
+}
+
+func setCStr(stringToSet **C.char, newString string) {
+	newCString := C.CString(newString)
+	oldCString := *stringToSet
+	C.free(unsafe.Pointer(oldCString))
+	*stringToSet = newCString
 }
 
 // use for debugging without diva running
