@@ -1,4 +1,4 @@
-module github.com/ovandermeer/MultiDiva
+module github.com/zvandermeer/MultiDiva/MultiDiva-Client
 
 go 1.19
 
