@@ -148,7 +148,8 @@ func GetFrameScore() {
 			scoreString := strconv.Itoa(score)
 			divalog.Log("Score: " + scoreString, 2)
 			divalog.Log("Change in score: " + strconv.Itoa(scoreChange), 2)
-			divalog.Log(fmt.Sprint("Note Grade: %s", noteGrade), 2)
+			divalog.Log("Note Grade: %s", 2)
+			divalog.Log(noteGrade, 2)
 
 			myData := map[string]string{
 				"Instruction": "note",
